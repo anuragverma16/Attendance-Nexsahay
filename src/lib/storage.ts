@@ -5,7 +5,10 @@ const KEYS = {
   employees: 'attendance_employees_v2',
   records: 'attendance_records_v3',
   session: 'attendance_admin_session',
+  theme: 'nexsahay_theme',
 } as const;
+
+export type ThemeMode = 'light' | 'dark';
 
 const LEGACY = {
   employees: 'attendance_employees',
@@ -129,6 +132,21 @@ export function isAdminLoggedIn(): boolean {
 export function setAdminSession(loggedIn: boolean) {
   if (loggedIn) localStorage.setItem(KEYS.session, 'true');
   else localStorage.removeItem(KEYS.session);
+}
+
+export function getTheme(): ThemeMode {
+  const saved = localStorage.getItem(KEYS.theme);
+  if (saved === 'dark' || saved === 'light') return saved;
+  return 'light';
+}
+
+export function setTheme(theme: ThemeMode) {
+  localStorage.setItem(KEYS.theme, theme);
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+}
+
+export function applyStoredTheme() {
+  setTheme(getTheme());
 }
 
 export function createId() {
