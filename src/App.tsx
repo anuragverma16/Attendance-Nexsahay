@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   LogIn,
   LogOut,
+  Menu,
   Moon,
   Pencil,
   Phone,
@@ -94,7 +95,10 @@ export default function App() {
   const [viewTab, setViewTab] = useState<ViewTab>('sheet');
   const [modal, setModal] = useState<Modal>('none');
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [notice, setNotice] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarSearch, setSidebarSearch] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchEmployeeId, setSearchEmployeeId] = useState('');
@@ -162,10 +166,20 @@ export default function App() {
   };
 
   const openEmployeeModal = () => {
+    setEditingEmployee(null);
     setEmpName('');
     setEmpContact('');
     setEmpRole('BDE');
     setModal('employee');
+  };
+
+  const openEditEmployeeModal = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setEmpName(employee.name);
+    setEmpContact(employee.contact);
+    setEmpRole(employee.role);
+    setModal('employee');
+    setSidebarOpen(false);
   };
 
   const openAttendanceModal = (prefillEmployeeId?: string) => {
@@ -176,6 +190,7 @@ export default function App() {
     setExitTime(DEFAULT_EXIT_TIME);
     setEditing(null);
     setModal('attendance');
+    setSidebarOpen(false);
   };
 
   const openEditModal = (record: AttendanceRecord) => {
@@ -191,9 +206,21 @@ export default function App() {
   const closeModal = () => {
     setModal('none');
     setEditing(null);
+    setEditingEmployee(null);
   };
 
-  const addEmployee = (e: FormEvent) => {
+  const sidebarEmployees = useMemo(() => {
+    const q = sidebarSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.contact.includes(q) ||
+        e.role.toLowerCase().includes(q)
+    );
+  }, [employees, sidebarSearch]);
+
+  const saveEmployee = (e: FormEvent) => {
     e.preventDefault();
     const name = empName.trim();
     const contact = empContact.trim();
@@ -204,17 +231,45 @@ export default function App() {
       return;
     }
 
-    const next: Employee = {
-      id: createId(),
-      name,
-      contact,
-      role: empRole,
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [...employees, next].sort((a, b) => a.name.localeCompare(b.name));
-    setEmployees(updated);
-    saveEmployees(updated);
-    setNotice(`Employee “${name}” added.`);
+    if (editingEmployee) {
+      const updatedEmployees = employees
+        .map((emp) =>
+          emp.id === editingEmployee.id
+            ? { ...emp, name, contact, role: empRole }
+            : emp
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const updatedRecords = records.map((r) =>
+        r.employeeId === editingEmployee.id
+          ? {
+              ...r,
+              employeeName: name,
+              employeeContact: contact,
+              employeeRole: empRole,
+            }
+          : r
+      );
+
+      setEmployees(updatedEmployees);
+      saveEmployees(updatedEmployees);
+      setRecords(updatedRecords);
+      saveRecords(updatedRecords);
+      setNotice(`Employee “${name}” updated.`);
+    } else {
+      const next: Employee = {
+        id: createId(),
+        name,
+        contact,
+        role: empRole,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...employees, next].sort((a, b) => a.name.localeCompare(b.name));
+      setEmployees(updated);
+      saveEmployees(updated);
+      setNotice(`Employee “${name}” added.`);
+    }
+
     closeModal();
   };
 
@@ -225,6 +280,7 @@ export default function App() {
     const updated = employees.filter((e) => e.id !== id);
     setEmployees(updated);
     saveEmployees(updated);
+    if (searchEmployeeId === id) setSearchEmployeeId('');
     setNotice(`Employee “${emp.name}” removed.`);
   };
 
@@ -912,89 +968,211 @@ export default function App() {
           </div>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-          {/* Employee Box */}
-          <aside className="ui-panel p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="ui-title">Employee Box</h2>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-900'
-                }`}
-              >
-                {employees.length}
-              </span>
+        {/* Mobile employee list toggle */}
+        <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
+              isDark
+                ? 'border-slate-700 bg-slate-900 text-slate-100'
+                : 'border-slate-200 bg-white text-slate-800'
+            }`}
+          >
+            <Menu className="h-4 w-4" />
+            Employees
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-900'
+              }`}
+            >
+              {employees.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={openEmployeeModal}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white ${
+              isDark ? 'bg-green-600' : 'bg-blue-900'
+            }`}
+          >
+            <UserPlus className="h-4 w-4" />
+            Add
+          </button>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+          {/* Mobile overlay */}
+          {sidebarOpen && (
+            <button
+              type="button"
+              aria-label="Close employee list"
+              className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+
+          {/* Employee Sidebar */}
+          <aside
+            className={`ui-panel z-50 flex flex-col p-0 transition-transform duration-300 lg:sticky lg:top-[4.5rem] lg:z-0 lg:max-h-[calc(100vh-6rem)] lg:translate-x-0 ${
+              sidebarOpen
+                ? 'fixed inset-y-0 left-0 w-[min(100%,22rem)] translate-x-0 rounded-none shadow-2xl'
+                : 'fixed inset-y-0 left-0 w-[min(100%,22rem)] -translate-x-full rounded-none lg:relative lg:w-auto lg:translate-x-0 lg:rounded-2xl'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between gap-2 border-b px-4 py-3 ${
+                isDark ? 'border-slate-800' : 'border-slate-100'
+              }`}
+            >
+              <div className="min-w-0">
+                <h2 className="ui-title">Employee List</h2>
+                <p className="ui-muted text-xs">{employees.length} total employees</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-900'
+                  }`}
+                >
+                  {sidebarEmployees.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`rounded-lg p-1.5 lg:hidden ${
+                    isDark
+                      ? 'text-slate-400 hover:bg-slate-800'
+                      : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                  aria-label="Close sidebar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            {employees.length === 0 ? (
-              <p
-                className={`rounded-xl border border-dashed px-3 py-8 text-center text-sm ${
-                  isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
+
+            <div className="space-y-3 px-4 py-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={sidebarSearch}
+                  onChange={(e) => setSidebarSearch(e.target.value)}
+                  placeholder="Search name, contact, role"
+                  className="ui-field pl-9"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={openEmployeeModal}
+                className={`hidden w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white lg:inline-flex ${
+                  isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
                 }`}
               >
-                No employees yet. Add name, contact, and role to start.
-              </p>
-            ) : (
-              <ul className="max-h-[640px] space-y-2 overflow-y-auto pr-1">
-                {employees.map((emp) => {
-                  const dayStatus =
-                    dayRows.find((r) => r.employee.id === emp.id)?.status ?? 'Not Marked';
-                  return (
-                    <li key={emp.id} className="ui-soft p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p
-                            className={`truncate text-sm font-semibold ${
-                              isDark ? 'text-slate-100' : 'text-slate-900'
-                            }`}
-                          >
-                            {emp.name}
-                          </p>
-                          <p
-                            className={`truncate text-xs font-medium ${
-                              isDark ? 'text-blue-300' : 'text-blue-900'
-                            }`}
-                          >
-                            {emp.role}
-                          </p>
-                          <p className="ui-muted mt-0.5 flex items-center gap-1 truncate text-xs">
-                            <Phone className="h-3 w-3 shrink-0" />
-                            {emp.contact}
-                          </p>
+                <UserPlus className="h-4 w-4" />
+                Add Employee
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+              {employees.length === 0 ? (
+                <p
+                  className={`mx-1 rounded-xl border border-dashed px-3 py-10 text-center text-sm ${
+                    isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
+                  }`}
+                >
+                  No employees yet. Add name, contact, and role to start.
+                </p>
+              ) : sidebarEmployees.length === 0 ? (
+                <p className="ui-muted px-2 py-8 text-center text-sm">No employee matched your search.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {sidebarEmployees.map((emp) => {
+                    const dayStatus =
+                      dayRows.find((r) => r.employee.id === emp.id)?.status ?? 'Not Marked';
+                    return (
+                      <li key={emp.id} className="ui-soft p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={`truncate text-sm font-semibold ${
+                                isDark ? 'text-slate-100' : 'text-slate-900'
+                              }`}
+                            >
+                              {emp.name}
+                            </p>
+                            <p
+                              className={`truncate text-xs font-medium ${
+                                isDark ? 'text-blue-300' : 'text-blue-900'
+                              }`}
+                            >
+                              {emp.role}
+                            </p>
+                            <p className="ui-muted mt-0.5 flex items-center gap-1 truncate text-xs">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              {emp.contact}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              onClick={() => openEditEmployeeModal(emp)}
+                              className={`rounded-lg p-1.5 ${
+                                isDark
+                                  ? 'text-slate-400 hover:bg-blue-500/15 hover:text-blue-300'
+                                  : 'text-slate-400 hover:bg-blue-50 hover:text-blue-900'
+                              }`}
+                              title="Edit employee"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteEmployee(emp.id)}
+                              className={`rounded-lg p-1.5 ${
+                                isDark
+                                  ? 'text-slate-500 hover:bg-rose-500/15 hover:text-rose-400'
+                                  : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+                              }`}
+                              title="Remove employee"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => deleteEmployee(emp.id)}
-                          className={`rounded-lg p-1.5 ${
-                            isDark
-                              ? 'text-slate-500 hover:bg-rose-500/15 hover:text-rose-400'
-                              : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
-                          }`}
-                          title="Remove employee"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <StatusBadge status={dayStatus} dark={isDark} />
-                        <button
-                          onClick={() => openAttendanceModal(emp.id)}
-                          className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
-                            isDark
-                              ? 'border-slate-700 bg-slate-900 text-blue-300 hover:bg-slate-800'
-                              : 'border-blue-100 bg-white text-blue-900 hover:bg-blue-50'
-                          }`}
-                        >
-                          Mark
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                          <StatusBadge status={dayStatus} dark={isDark} />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openEditEmployeeModal(emp)}
+                              className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                                isDark
+                                  ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => openAttendanceModal(emp.id)}
+                              className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                                isDark
+                                  ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
+                                  : 'border-blue-100 bg-white text-blue-900 hover:bg-blue-50'
+                              }`}
+                            >
+                              Mark
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </aside>
 
           {/* Attendance Sheet / Report / Search */}
-          <section className="ui-panel overflow-hidden">
+          <section className="ui-panel min-w-0 overflow-hidden">
             <div
               className={`border-b px-4 py-4 sm:px-5 ${
                 isDark ? 'border-slate-800' : 'border-slate-100'
@@ -1437,7 +1615,9 @@ export default function App() {
             <div className="mb-5 flex items-center justify-between">
               <h2 className={`font-display text-lg font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
                 {modal === 'employee'
-                  ? 'Add Employee'
+                  ? editingEmployee
+                    ? 'Edit Employee'
+                    : 'Add Employee'
                   : modal === 'edit-attendance'
                     ? 'Edit Attendance'
                     : 'Add Attendance'}
@@ -1455,7 +1635,7 @@ export default function App() {
             </div>
 
             {modal === 'employee' ? (
-              <form onSubmit={addEmployee} className="space-y-4">
+              <form onSubmit={saveEmployee} className="space-y-4">
                 <div>
                   <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                     Employee name
@@ -1510,7 +1690,7 @@ export default function App() {
                       isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
                     }`}
                   >
-                    Save Employee
+                    {editingEmployee ? 'Update Employee' : 'Save Employee'}
                   </button>
                 </div>
               </form>
