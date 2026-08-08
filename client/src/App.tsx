@@ -37,21 +37,27 @@ import {
   type ReportPeriod,
 } from '@/lib/exportExcel';
 import {
+  apiCreateEmployee,
+  apiDeleteAttendance,
+  apiDeleteEmployee,
+  apiGetAttendance,
+  apiGetEmployees,
+  apiLogin,
+  apiSeed,
+  apiUpdateAttendance,
+  apiUpdateEmployee,
+  apiUpsertAttendance,
+} from '@/lib/api';
+import {
   applyStoredTheme,
-  createId,
-  getEmployees,
-  getRecords,
   getTheme,
   isAdminLoggedIn,
-  saveEmployees,
-  saveRecords,
   setAdminSession,
   setTheme,
   todayISO,
   type ThemeMode,
 } from '@/lib/storage';
 import {
-  ADMIN_CREDENTIALS,
   DEFAULT_ENTRY_TIME,
   DEFAULT_EXIT_TIME,
   EMPLOYEE_ROLES,
@@ -97,6 +103,7 @@ export default function App() {
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [notice, setNotice] = useState('');
+  const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState('');
 
@@ -116,10 +123,24 @@ export default function App() {
   const [entryTime, setEntryTime] = useState(DEFAULT_ENTRY_TIME);
   const [exitTime, setExitTime] = useState(DEFAULT_EXIT_TIME);
 
+  const refreshData = async () => {
+    setLoadingData(true);
+    try {
+      const [emps, atts] = await Promise.all([apiGetEmployees(), apiGetAttendance()]);
+      setEmployees(emps);
+      setRecords(atts);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to load data from backend.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   useEffect(() => {
-    setEmployees(getEmployees());
-    setRecords(getRecords());
-  }, []);
+    if (loggedIn) {
+      void refreshData();
+    }
+  }, [loggedIn]);
 
   const dayRows = useMemo(
     () => buildDayRows(employees, records, selectedDate, roleFilter),
@@ -143,18 +164,16 @@ export default function App() {
     };
   }, [dayRows]);
 
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    if (
-      username.trim() === ADMIN_CREDENTIALS.username &&
-      password === ADMIN_CREDENTIALS.password
-    ) {
+    setLoginError('');
+    try {
+      await apiLogin(username.trim(), password);
       setAdminSession(true);
       setLoggedIn(true);
-      setLoginError('');
       setPassword('');
-    } else {
-      setLoginError('Invalid admin username or password.');
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : 'Login failed.');
     }
   };
 
@@ -220,7 +239,7 @@ export default function App() {
     );
   }, [employees, sidebarSearch]);
 
-  const saveEmployee = (e: FormEvent) => {
+  const saveEmployee = async (e: FormEvent) => {
     e.preventDefault();
     const name = empName.trim();
     const contact = empContact.trim();
@@ -231,60 +250,36 @@ export default function App() {
       return;
     }
 
-    if (editingEmployee) {
-      const updatedEmployees = employees
-        .map((emp) =>
-          emp.id === editingEmployee.id
-            ? { ...emp, name, contact, role: empRole }
-            : emp
-        )
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-      const updatedRecords = records.map((r) =>
-        r.employeeId === editingEmployee.id
-          ? {
-              ...r,
-              employeeName: name,
-              employeeContact: contact,
-              employeeRole: empRole,
-            }
-          : r
-      );
-
-      setEmployees(updatedEmployees);
-      saveEmployees(updatedEmployees);
-      setRecords(updatedRecords);
-      saveRecords(updatedRecords);
-      setNotice(`Employee “${name}” updated.`);
-    } else {
-      const next: Employee = {
-        id: createId(),
-        name,
-        contact,
-        role: empRole,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...employees, next].sort((a, b) => a.name.localeCompare(b.name));
-      setEmployees(updated);
-      saveEmployees(updated);
-      setNotice(`Employee “${name}” added.`);
+    try {
+      if (editingEmployee) {
+        await apiUpdateEmployee(editingEmployee.id, { name, contact, role: empRole });
+        setNotice(`Employee “${name}” updated.`);
+      } else {
+        await apiCreateEmployee({ name, contact, role: empRole });
+        setNotice(`Employee “${name}” added.`);
+      }
+      await refreshData();
+      closeModal();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to save employee.');
     }
-
-    closeModal();
   };
 
-  const deleteEmployee = (id: string) => {
+  const deleteEmployee = async (id: string) => {
     const emp = employees.find((e) => e.id === id);
     if (!emp) return;
     if (!confirm(`Remove employee “${emp.name}”? Their attendance history stays saved.`)) return;
-    const updated = employees.filter((e) => e.id !== id);
-    setEmployees(updated);
-    saveEmployees(updated);
-    if (searchEmployeeId === id) setSearchEmployeeId('');
-    setNotice(`Employee “${emp.name}” removed.`);
+    try {
+      await apiDeleteEmployee(id);
+      if (searchEmployeeId === id) setSearchEmployeeId('');
+      await refreshData();
+      setNotice(`Employee “${emp.name}” removed.`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to delete employee.');
+    }
   };
 
-  const upsertAttendance = (
+  const upsertAttendance = async (
     employee: Employee,
     date: string,
     nextStatus: AttendanceStatus,
@@ -292,41 +287,33 @@ export default function App() {
     nextExit: string,
     existingId?: string
   ) => {
-    const payload: AttendanceRecord = {
-      id: existingId || createId(),
-      employeeId: employee.id,
-      employeeName: employee.name,
-      employeeContact: employee.contact,
-      employeeRole: employee.role,
-      date,
-      status: nextStatus,
-      entryTime: nextStatus === 'Present' ? nextEntry : '',
-      exitTime: nextStatus === 'Present' ? nextExit : '',
-      createdAt: new Date().toISOString(),
-    };
-
-    let updated: AttendanceRecord[];
-    if (existingId) {
-      updated = records.map((r) =>
-        r.id === existingId ? { ...payload, createdAt: r.createdAt } : r
-      );
-    } else {
-      const already = records.find((r) => r.employeeId === employee.id && r.date === date);
-      if (already) {
-        updated = records.map((r) =>
-          r.id === already.id ? { ...payload, id: already.id, createdAt: already.createdAt } : r
-        );
+    try {
+      if (existingId) {
+        await apiUpdateAttendance(existingId, {
+          employeeId: employee.id,
+          date,
+          status: nextStatus,
+          entryTime: nextStatus === 'Present' ? nextEntry : '',
+          exitTime: nextStatus === 'Present' ? nextExit : '',
+        });
       } else {
-        updated = [payload, ...records];
+        await apiUpsertAttendance({
+          employeeId: employee.id,
+          date,
+          status: nextStatus,
+          entryTime: nextStatus === 'Present' ? nextEntry : '',
+          exitTime: nextStatus === 'Present' ? nextExit : '',
+        });
       }
+      setSelectedDate(date);
+      await refreshData();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to save attendance.');
+      throw err;
     }
-
-    setRecords(updated);
-    saveRecords(updated);
-    setSelectedDate(date);
   };
 
-  const saveAttendance = (e: FormEvent) => {
+  const saveAttendance = async (e: FormEvent) => {
     e.preventDefault();
     if (!employeeId || !attDate) {
       setNotice('Please select employee and date.');
@@ -360,12 +347,16 @@ export default function App() {
         createdAt: editing!.createdAt,
       } as Employee);
 
-    upsertAttendance(emp, attDate, status, entryTime, exitTime, editing?.id);
-    setNotice(`Attendance marked ${status} for ${emp.name}.`);
-    closeModal();
+    try {
+      await upsertAttendance(emp, attDate, status, entryTime, exitTime, editing?.id);
+      setNotice(`Attendance marked ${status} for ${emp.name}.`);
+      closeModal();
+    } catch {
+      // notice already set
+    }
   };
 
-  const markEntry = (employee: Employee) => {
+  const markEntry = async (employee: Employee) => {
     const existing = records.find(
       (r) => r.employeeId === employee.id && r.date === selectedDate
     );
@@ -373,20 +364,24 @@ export default function App() {
       setNotice(`${employee.name} is marked Absent. Edit the record to change status.`);
       return;
     }
-    upsertAttendance(
-      employee,
-      selectedDate,
-      'Present',
-      DEFAULT_ENTRY_TIME,
-      existing?.exitTime || '',
-      existing?.id
-    );
-    setNotice(
-      `Entry marked for ${employee.name} at ${formatTime12h(DEFAULT_ENTRY_TIME)}.`
-    );
+    try {
+      await upsertAttendance(
+        employee,
+        selectedDate,
+        'Present',
+        DEFAULT_ENTRY_TIME,
+        existing?.exitTime || '',
+        existing?.id
+      );
+      setNotice(
+        `Entry marked for ${employee.name} at ${formatTime12h(DEFAULT_ENTRY_TIME)}.`
+      );
+    } catch {
+      // notice already set
+    }
   };
 
-  const markExit = (employee: Employee) => {
+  const markExit = async (employee: Employee) => {
     const existing = records.find(
       (r) => r.employeeId === employee.id && r.date === selectedDate
     );
@@ -394,33 +389,57 @@ export default function App() {
       setNotice(`Mark entry first for ${employee.name}.`);
       return;
     }
-    upsertAttendance(
-      employee,
-      selectedDate,
-      'Present',
-      existing.entryTime || DEFAULT_ENTRY_TIME,
-      DEFAULT_EXIT_TIME,
-      existing.id
-    );
-    setNotice(
-      `Exit marked for ${employee.name} at ${formatTime12h(DEFAULT_EXIT_TIME)}.`
-    );
+    try {
+      await upsertAttendance(
+        employee,
+        selectedDate,
+        'Present',
+        existing.entryTime || DEFAULT_ENTRY_TIME,
+        DEFAULT_EXIT_TIME,
+        existing.id
+      );
+      setNotice(
+        `Exit marked for ${employee.name} at ${formatTime12h(DEFAULT_EXIT_TIME)}.`
+      );
+    } catch {
+      // notice already set
+    }
   };
 
-  const markAbsent = (employee: Employee) => {
+  const markAbsent = async (employee: Employee) => {
     const existing = records.find(
       (r) => r.employeeId === employee.id && r.date === selectedDate
     );
-    upsertAttendance(employee, selectedDate, 'Absent', '', '', existing?.id);
-    setNotice(`${employee.name} marked Absent.`);
+    try {
+      await upsertAttendance(employee, selectedDate, 'Absent', '', '', existing?.id);
+      setNotice(`${employee.name} marked Absent.`);
+    } catch {
+      // notice already set
+    }
   };
 
-  const deleteRecord = (id: string) => {
+  const deleteRecord = async (id: string) => {
     if (!confirm('Delete this attendance record?')) return;
-    const updated = records.filter((r) => r.id !== id);
-    setRecords(updated);
-    saveRecords(updated);
-    setNotice('Attendance record deleted.');
+    try {
+      await apiDeleteAttendance(id);
+      await refreshData();
+      setNotice('Attendance record deleted.');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to delete attendance.');
+    }
+  };
+
+  const handleSeedSample = async () => {
+    if (!confirm('Replace backend data with sample employees and attendance?')) return;
+    try {
+      const result = await apiSeed();
+      await refreshData();
+      setNotice(
+        `${result.message} (${result.employees} employees, ${result.attendance} records)`
+      );
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to seed sample data.');
+    }
   };
 
   const weekRange = useMemo(() => getWeekRange(selectedDate), [selectedDate]);
@@ -954,6 +973,16 @@ export default function App() {
               <Download className="h-4 w-4" />
               Export All Dates
             </button>
+            <button
+              onClick={() => void handleSeedSample()}
+              className="ui-btn-ghost"
+              title="Load sample employees and attendance into backend"
+            >
+              Load Sample Data
+            </button>
+            {loadingData && (
+              <span className="ui-muted self-center text-xs font-medium">Syncing backend...</span>
+            )}
           </div>
 
           <div className={`ui-soft px-3 py-2 text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
