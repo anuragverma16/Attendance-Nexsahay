@@ -1,6 +1,6 @@
 import type { AttendanceRecord, AttendanceStatus, Employee, EmployeeRole } from './types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 type ApiResponse<T> = {
   success: boolean;
