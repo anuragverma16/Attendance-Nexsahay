@@ -49,8 +49,16 @@ Leave `VITE_API_URL` unset locally. Vite proxies `/api` to `http://localhost:500
 
 `client/.env.production` already sets this for production builds. Redeploy the client after changing `VITE_*` values.
 
-## Atlas checklist
+## Atlas checklist (required for login on Vercel)
 
-- Create a cluster and database user
-- Network Access: allow `0.0.0.0/0` (or Vercel egress)
-- Put the `mongodb+srv://...` URI in the server project's `MONGODB_URI`
+Login fails with `net::ERR_FAILED` if the server still uses localhost MongoDB.
+
+1. Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+2. Database Access → create user/password
+3. Network Access → allow `0.0.0.0/0`
+4. Connect → Drivers → copy `mongodb+srv://...` URI
+5. In Vercel project **attendance-nexsahay-server** → Settings → Environment Variables:
+   - `MONGODB_URI` = that Atlas URI
+   - `CLIENT_ORIGIN` = `https://attendance-nexsahay26.vercel.app,http://localhost:5173`
+   - `ADMIN_USERNAME` / `ADMIN_PASSWORD`
+6. Redeploy the server, then hard-refresh the client

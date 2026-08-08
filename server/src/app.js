@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express from 'express';
-import { env } from './config/env.js';
+import { isOriginAllowed } from './config/cors.js';
 import routes from './routes/index.js';
 
 const app = express();
@@ -8,12 +8,13 @@ const app = express();
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || env.clientOrigins.includes(origin)) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
         return;
       }
-      callback(new Error(`CORS blocked for origin: ${origin}`));
+      callback(null, false);
     },
+    credentials: true,
   })
 );
 app.use(express.json());

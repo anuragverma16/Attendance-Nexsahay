@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   FileSpreadsheet,
@@ -74,6 +76,7 @@ type ViewTab = 'sheet' | 'report' | 'search';
 const FAVICON_SRC = '/favicon.png';
 const LIGHT_LOGO_SRC = '/logo.png';
 const DARK_LOGO_SRC = '/favicon.png';
+const DAY_PAGE_SIZE = 5;
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isAdminLoggedIn);
@@ -106,6 +109,7 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState('');
+  const [dayPage, setDayPage] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchEmployeeId, setSearchEmployeeId] = useState('');
@@ -151,6 +155,23 @@ export default function App() {
     if (statusFilter === 'all') return dayRows;
     return dayRows.filter((row) => row.status === statusFilter);
   }, [dayRows, statusFilter]);
+
+  const dayPageCount = Math.max(1, Math.ceil(filteredDayRows.length / DAY_PAGE_SIZE));
+
+  const pagedDayRows = useMemo(() => {
+    const start = dayPage * DAY_PAGE_SIZE;
+    return filteredDayRows.slice(start, start + DAY_PAGE_SIZE);
+  }, [filteredDayRows, dayPage]);
+
+  useEffect(() => {
+    setDayPage(0);
+  }, [selectedDate, roleFilter, statusFilter, viewTab]);
+
+  useEffect(() => {
+    if (dayPage > dayPageCount - 1) {
+      setDayPage(Math.max(0, dayPageCount - 1));
+    }
+  }, [dayPage, dayPageCount]);
 
   const stats = useMemo(() => {
     const present = dayRows.filter((r) => r.status === 'Present').length;
@@ -553,6 +574,28 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [notice]);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => {
+      if (mq.matches) setSidebarOpen(false);
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    const isMobileDrawer =
+      sidebarOpen && typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+    const lock = isMobileDrawer || modal !== 'none';
+    if (!lock) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sidebarOpen, modal]);
+
   if (!loggedIn) {
     return (
       <div
@@ -563,7 +606,7 @@ export default function App() {
         <button
           type="button"
           onClick={toggleTheme}
-          className={`absolute right-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-lg transition sm:right-6 sm:top-6 ${
+          className={`absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-lg transition sm:right-6 sm:top-6 ${
             isDark
               ? 'border-slate-700 bg-slate-900 text-amber-300 hover:bg-slate-800'
               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -574,27 +617,27 @@ export default function App() {
           <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
         </button>
 
-        <div className="grid min-h-screen w-full lg:grid-cols-2">
-          {/* Logo panel — full height fill */}
+        <div className="grid min-h-[100dvh] w-full lg:grid-cols-2">
+          {/* Logo panel — compact on phones */}
           <section
-            className={`relative flex min-h-[42vh] items-center justify-center lg:min-h-screen ${
+            className={`relative flex min-h-[30vh] items-center justify-center sm:min-h-[38vh] lg:min-h-screen ${
               isDark ? 'bg-black' : 'bg-white'
             }`}
           >
-            <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-10 lg:p-14">
+            <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-10 lg:p-14">
               {isDark ? (
-                <div className="flex h-full w-full max-w-lg flex-col items-center justify-center gap-6 animate-fade-in">
+                <div className="flex h-full w-full max-w-lg flex-col items-center justify-center gap-3 animate-fade-in sm:gap-6">
                   <img
                     src={DARK_LOGO_SRC}
                     alt="Nexsahay"
-                    className="h-auto w-full max-w-[280px] object-contain object-center sm:max-w-[340px]"
+                    className="h-auto w-full max-w-[160px] object-contain object-center sm:max-w-[280px] md:max-w-[340px]"
                   />
                   <div className="text-center">
-                    <p className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+                    <p className="font-display text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
                       <span className="text-blue-400">Nex</span>
                       <span className="text-green-400">sahay</span>
                     </p>
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 sm:mt-2 sm:text-xs">
                       Startup Advisory
                     </p>
                   </div>
@@ -603,7 +646,7 @@ export default function App() {
                 <img
                   src={LIGHT_LOGO_SRC}
                   alt="Nexsahay Startup Advisory"
-                  className="h-full w-full max-h-[70vh] object-contain object-center animate-fade-in"
+                  className="h-full w-full max-h-[28vh] object-contain object-center animate-fade-in sm:max-h-[50vh] lg:max-h-[70vh]"
                 />
               )}
             </div>
@@ -611,16 +654,16 @@ export default function App() {
 
           {/* Login form panel */}
           <section
-            className={`flex min-h-[58vh] items-center justify-center px-4 py-10 sm:px-8 lg:min-h-screen ${
+            className={`flex min-h-0 flex-1 items-center justify-center px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 sm:py-10 lg:min-h-screen ${
               isDark
                 ? 'bg-slate-950'
                 : 'bg-gradient-to-br from-slate-50 via-white to-blue-50/40'
             }`}
           >
             <div className="w-full max-w-md animate-fade-in">
-              <div className="mb-8 text-center lg:text-left">
+              <div className="mb-5 text-center sm:mb-8 lg:text-left">
                 <h1
-                  className={`font-display text-3xl font-bold tracking-tight ${
+                  className={`font-display text-2xl font-bold tracking-tight sm:text-3xl ${
                     isDark ? 'text-white' : 'text-slate-900'
                   }`}
                 >
@@ -633,7 +676,7 @@ export default function App() {
 
               <form
                 onSubmit={handleLogin}
-                className={`rounded-3xl border p-6 shadow-xl sm:p-8 ${
+                className={`rounded-2xl border p-5 shadow-xl sm:rounded-3xl sm:p-8 ${
                   isDark
                     ? 'border-slate-800 bg-slate-900 shadow-black/40'
                     : 'border-slate-200 bg-white shadow-slate-200/60'
@@ -724,37 +767,37 @@ export default function App() {
             : 'border-slate-200/80 bg-white/90'
         }`}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:gap-3 sm:px-6 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <img
               src={isDark ? DARK_LOGO_SRC : FAVICON_SRC}
               alt="Nexsahay"
-              className={`h-11 w-11 rounded-full border object-cover shadow-sm ${
+              className={`h-9 w-9 shrink-0 rounded-full border object-cover shadow-sm sm:h-11 sm:w-11 ${
                 isDark ? 'border-slate-700 bg-black' : 'border-slate-200 bg-black'
               }`}
             />
             <div className="min-w-0">
-              <h1 className="font-display truncate text-lg font-bold">
+              <h1 className="font-display truncate text-base font-bold sm:text-lg">
                 <span className={isDark ? 'text-blue-400' : 'text-blue-900'}>Nex</span>
                 <span className="text-green-500">sahay</span>
                 <span
-                  className={`ml-2 text-sm font-semibold ${
+                  className={`ml-1.5 text-xs font-semibold sm:ml-2 sm:text-sm ${
                     isDark ? 'text-slate-400' : 'text-slate-500'
                   }`}
                 >
                   Attendance
                 </span>
               </h1>
-              <p className={`truncate text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
+              <p className={`hidden truncate text-xs sm:block ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
                 Startup Advisory · Admin panel
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={toggleTheme}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+              className={`inline-flex items-center justify-center rounded-xl border p-2.5 text-sm font-medium transition sm:px-3 sm:py-2 ${
                 isDark
                   ? 'border-slate-700 bg-slate-900 text-amber-300 hover:bg-slate-800'
                   : 'border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -765,20 +808,21 @@ export default function App() {
             </button>
             <button
               onClick={handleLogout}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+              className={`inline-flex items-center gap-2 rounded-xl border p-2.5 text-sm font-medium transition sm:px-3 sm:py-2 ${
                 isDark
                   ? 'border-slate-700 text-slate-200 hover:bg-slate-900'
                   : 'border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
+              aria-label="Logout"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 animate-fade-in">
+      <main className="mx-auto max-w-6xl px-3 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 animate-fade-in">
         {notice && (
           <div
             className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
@@ -791,7 +835,7 @@ export default function App() {
           </div>
         )}
 
-        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
           <StatCard label="Total Employees" value={stats.total} icon={<Users className="h-4 w-4" />} dark={isDark} />
           <StatCard
             label="Present"
@@ -816,7 +860,7 @@ export default function App() {
           />
         </section>
 
-        <section className="ui-panel mb-6 flex flex-col gap-3 p-4 sm:p-5">
+        <section className="ui-panel mb-4 flex flex-col gap-3 p-3 sm:mb-6 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="ui-label">Date</label>
@@ -865,7 +909,7 @@ export default function App() {
               >
                 <button
                   onClick={() => setViewTab('sheet')}
-                  className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition ${
+                  className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition sm:px-2 sm:text-sm ${
                     viewTab === 'sheet'
                       ? isDark
                         ? 'bg-green-600 text-white'
@@ -879,7 +923,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setViewTab('report')}
-                  className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition ${
+                  className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition sm:px-2 sm:text-sm ${
                     viewTab === 'report'
                       ? isDark
                         ? 'bg-green-600 text-white'
@@ -893,7 +937,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setViewTab('search')}
-                  className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition ${
+                  className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition sm:px-2 sm:text-sm ${
                     viewTab === 'search'
                       ? isDark
                         ? 'bg-green-600 text-white'
@@ -921,84 +965,92 @@ export default function App() {
             </span>
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            <button onClick={openEmployeeModal} className="ui-btn-ghost">
-              <UserPlus className="h-4 w-4" />
-              Add Employee
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <button onClick={openEmployeeModal} className="ui-btn-ghost justify-center sm:justify-start">
+              <UserPlus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Add Employee</span>
             </button>
             <button
               onClick={() => openAttendanceModal()}
               disabled={employees.length === 0}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-start ${
                 isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
               }`}
             >
-              <Plus className="h-4 w-4" />
-              Add Attendance
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Add Attendance</span>
             </button>
             <button
               onClick={() => handleExportReport('day')}
-              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-green-700 sm:justify-start"
               title={`Day report for ${formatDisplayDate(selectedDate)}`}
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export Day
+              <FileSpreadsheet className="h-4 w-4 shrink-0" />
+              <span className="truncate">Export Day</span>
             </button>
             <button
               onClick={() => handleExportReport('week')}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white ${
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white sm:justify-start ${
                 isDark ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-900 hover:bg-blue-950'
               }`}
               title={`Week ${formatDisplayDate(weekRange.startISO)} – ${formatDisplayDate(weekRange.endISO)}`}
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export Week
+              <FileSpreadsheet className="h-4 w-4 shrink-0" />
+              <span className="truncate">Export Week</span>
             </button>
             <button
               onClick={() => handleExportReport('month')}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 sm:justify-start"
               title={`Month report: ${monthRange.label}`}
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export Month
+              <FileSpreadsheet className="h-4 w-4 shrink-0" />
+              <span className="truncate">Export Month</span>
             </button>
             <button
               onClick={handleExportAll}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
+              className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold sm:justify-start ${
                 isDark
                   ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
                   : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
               }`}
             >
-              <Download className="h-4 w-4" />
-              Export All Dates
+              <Download className="h-4 w-4 shrink-0" />
+              <span className="truncate">Export All</span>
             </button>
             <button
               onClick={() => void handleSeedSample()}
-              className="ui-btn-ghost"
+              className="ui-btn-ghost col-span-2 justify-center sm:col-span-1 sm:justify-start"
               title="Load sample employees and attendance into backend"
             >
               Load Sample Data
             </button>
             {loadingData && (
-              <span className="ui-muted self-center text-xs font-medium">Syncing backend...</span>
+              <span className="ui-muted col-span-2 self-center text-center text-xs font-medium sm:col-span-1 sm:text-left">
+                Syncing backend...
+              </span>
             )}
           </div>
 
-          <div className={`ui-soft px-3 py-2 text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+          <div
+            className={`ui-soft px-3 py-2 text-[11px] leading-relaxed sm:text-xs ${
+              isDark ? 'text-slate-300' : 'text-slate-600'
+            }`}
+          >
             <span className={isDark ? 'font-semibold text-slate-100' : 'font-semibold text-slate-800'}>
-              Excel period based on selected date:
+              Excel period:
             </span>{' '}
-            Day = {formatDisplayDate(selectedDate)}
-            {' · '}
-            Week = {formatDisplayDate(weekRange.startISO)} to {formatDisplayDate(weekRange.endISO)}
-            {' · '}
-            Month = {monthRange.label}
+            <span className="block sm:inline">Day = {formatDisplayDate(selectedDate)}</span>
+            <span className="hidden sm:inline">{' · '}</span>
+            <span className="block sm:inline">
+              Week = {formatDisplayDate(weekRange.startISO)} to {formatDisplayDate(weekRange.endISO)}
+            </span>
+            <span className="hidden sm:inline">{' · '}</span>
+            <span className="block sm:inline">Month = {monthRange.label}</span>
           </div>
         </section>
 
-        {/* Mobile employee list toggle */}
-        <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
+        {/* Phone-only employee list toggle */}
+        <div className="mb-4 flex items-center justify-between gap-3 md:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -1030,186 +1082,72 @@ export default function App() {
           </button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {/* Mobile overlay */}
-          {sidebarOpen && (
-            <button
-              type="button"
-              aria-label="Close employee list"
-              className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm lg:hidden"
-              onClick={() => setSidebarOpen(false)}
+        {/* Phone drawer overlay */}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close employee list"
+            className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Phone drawer (separate from PC layout so it never overlaps the sheet) */}
+        <aside
+          className={`ui-panel fixed inset-y-0 left-0 z-50 flex w-[min(100vw,20rem)] flex-col rounded-none p-0 shadow-2xl transition-transform duration-300 md:hidden ${
+            sidebarOpen
+              ? 'translate-x-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+              : 'pointer-events-none -translate-x-full'
+          }`}
+          aria-hidden={!sidebarOpen}
+        >
+          <EmployeeSidebarBody
+            isDark={isDark}
+            employees={employees}
+            sidebarEmployees={sidebarEmployees}
+            dayRows={dayRows}
+            sidebarSearch={sidebarSearch}
+            setSidebarSearch={setSidebarSearch}
+            showClose
+            onClose={() => setSidebarOpen(false)}
+            onAddEmployee={openEmployeeModal}
+            onEditEmployee={openEditEmployeeModal}
+            onDeleteEmployee={deleteEmployee}
+            onMarkAttendance={openAttendanceModal}
+            showDesktopAdd={false}
+          />
+        </aside>
+
+        <div className="grid min-w-0 gap-6 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
+          {/* PC / tablet sidebar — in normal document flow, never fixed */}
+          <aside className="ui-panel sticky top-[4.5rem] z-0 hidden max-h-[calc(100vh-6rem)] flex-col overflow-hidden p-0 md:flex">
+            <EmployeeSidebarBody
+              isDark={isDark}
+              employees={employees}
+              sidebarEmployees={sidebarEmployees}
+              dayRows={dayRows}
+              sidebarSearch={sidebarSearch}
+              setSidebarSearch={setSidebarSearch}
+              showClose={false}
+              onClose={() => setSidebarOpen(false)}
+              onAddEmployee={openEmployeeModal}
+              onEditEmployee={openEditEmployeeModal}
+              onDeleteEmployee={deleteEmployee}
+              onMarkAttendance={openAttendanceModal}
+              showDesktopAdd
             />
-          )}
-
-          {/* Employee Sidebar */}
-          <aside
-            className={`ui-panel z-50 flex flex-col p-0 transition-transform duration-300 lg:sticky lg:top-[4.5rem] lg:z-0 lg:max-h-[calc(100vh-6rem)] lg:translate-x-0 ${
-              sidebarOpen
-                ? 'fixed inset-y-0 left-0 w-[min(100%,22rem)] translate-x-0 rounded-none shadow-2xl'
-                : 'fixed inset-y-0 left-0 w-[min(100%,22rem)] -translate-x-full rounded-none lg:relative lg:w-auto lg:translate-x-0 lg:rounded-2xl'
-            }`}
-          >
-            <div
-              className={`flex items-center justify-between gap-2 border-b px-4 py-3 ${
-                isDark ? 'border-slate-800' : 'border-slate-100'
-              }`}
-            >
-              <div className="min-w-0">
-                <h2 className="ui-title">Employee List</h2>
-                <p className="ui-muted text-xs">{employees.length} total employees</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-900'
-                  }`}
-                >
-                  {sidebarEmployees.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(false)}
-                  className={`rounded-lg p-1.5 lg:hidden ${
-                    isDark
-                      ? 'text-slate-400 hover:bg-slate-800'
-                      : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                  aria-label="Close sidebar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3 px-4 py-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                  placeholder="Search name, contact, role"
-                  className="ui-field pl-9"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={openEmployeeModal}
-                className={`hidden w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white lg:inline-flex ${
-                  isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
-                }`}
-              >
-                <UserPlus className="h-4 w-4" />
-                Add Employee
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-              {employees.length === 0 ? (
-                <p
-                  className={`mx-1 rounded-xl border border-dashed px-3 py-10 text-center text-sm ${
-                    isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
-                  }`}
-                >
-                  No employees yet. Add name, contact, and role to start.
-                </p>
-              ) : sidebarEmployees.length === 0 ? (
-                <p className="ui-muted px-2 py-8 text-center text-sm">No employee matched your search.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {sidebarEmployees.map((emp) => {
-                    const dayStatus =
-                      dayRows.find((r) => r.employee.id === emp.id)?.status ?? 'Not Marked';
-                    return (
-                      <li key={emp.id} className="ui-soft p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={`truncate text-sm font-semibold ${
-                                isDark ? 'text-slate-100' : 'text-slate-900'
-                              }`}
-                            >
-                              {emp.name}
-                            </p>
-                            <p
-                              className={`truncate text-xs font-medium ${
-                                isDark ? 'text-blue-300' : 'text-blue-900'
-                              }`}
-                            >
-                              {emp.role}
-                            </p>
-                            <p className="ui-muted mt-0.5 flex items-center gap-1 truncate text-xs">
-                              <Phone className="h-3 w-3 shrink-0" />
-                              {emp.contact}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-0.5">
-                            <button
-                              onClick={() => openEditEmployeeModal(emp)}
-                              className={`rounded-lg p-1.5 ${
-                                isDark
-                                  ? 'text-slate-400 hover:bg-blue-500/15 hover:text-blue-300'
-                                  : 'text-slate-400 hover:bg-blue-50 hover:text-blue-900'
-                              }`}
-                              title="Edit employee"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => deleteEmployee(emp.id)}
-                              className={`rounded-lg p-1.5 ${
-                                isDark
-                                  ? 'text-slate-500 hover:bg-rose-500/15 hover:text-rose-400'
-                                  : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
-                              }`}
-                              title="Remove employee"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                          <StatusBadge status={dayStatus} dark={isDark} />
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => openEditEmployeeModal(emp)}
-                              className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
-                                isDark
-                                  ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
-                                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                              }`}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openAttendanceModal(emp.id)}
-                              className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
-                                isDark
-                                  ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
-                                  : 'border-blue-100 bg-white text-blue-900 hover:bg-blue-50'
-                              }`}
-                            >
-                              Mark
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
           </aside>
 
           {/* Attendance Sheet / Report / Search */}
           <section className="ui-panel min-w-0 overflow-hidden">
             <div
-              className={`border-b px-4 py-4 sm:px-5 ${
+              className={`border-b px-3 py-3 sm:px-5 sm:py-4 ${
                 isDark ? 'border-slate-800' : 'border-slate-100'
               }`}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="ui-title">
+              <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="ui-title text-sm sm:text-base">
                     {viewTab === 'sheet'
                       ? 'Daily Attendance Sheet'
                       : viewTab === 'report'
@@ -1223,14 +1161,14 @@ export default function App() {
                   </p>
                 </div>
                 <div
-                  className={`rounded-xl border px-3 py-2 text-xs ${
+                  className={`rounded-xl border px-2.5 py-1.5 text-[11px] sm:px-3 sm:py-2 sm:text-xs ${
                     isDark
                       ? 'border-blue-500/30 bg-blue-500/10 text-blue-200'
                       : 'border-blue-100 bg-blue-50 text-blue-900'
                   }`}
                 >
-                  <p className="font-semibold">Standard Shift</p>
-                  <p>
+                  <p className="font-semibold">Shift</p>
+                  <p className="whitespace-nowrap">
                     {formatTime12h(DEFAULT_ENTRY_TIME)} – {formatTime12h(DEFAULT_EXIT_TIME)}
                   </p>
                 </div>
@@ -1350,10 +1288,10 @@ export default function App() {
                   <button
                     onClick={handleExportEmployeeMonth}
                     disabled={!searchEmployee}
-                    className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
                     <FileSpreadsheet className="h-4 w-4" />
-                    Export Employee Month
+                    Export Month
                   </button>
                 </div>
 
@@ -1370,7 +1308,7 @@ export default function App() {
                 ) : (
                   <>
                     <div
-                      className={`grid grid-cols-2 gap-3 border-b p-4 sm:grid-cols-4 sm:p-5 ${
+                      className={`grid grid-cols-2 gap-2 border-b p-3 sm:grid-cols-4 sm:gap-3 sm:p-5 ${
                         isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-100 bg-slate-50/70'
                       }`}
                     >
@@ -1379,7 +1317,44 @@ export default function App() {
                       <MiniStat label="Absent" value={employeeMonthStats.absent} className="text-rose-400" dark={isDark} />
                       <MiniStat label="Not Marked" value={employeeMonthStats.notMarked} className="text-amber-400" dark={isDark} />
                     </div>
-                    <div className="overflow-x-auto">
+
+                    {/* Phone cards */}
+                    <div className="mobile-card-list md:hidden">
+                      {employeeMonthRows.map((row, index) => (
+                        <article key={row.date} className="ui-soft p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="ui-muted text-[11px]">#{index + 1} · {row.day}</p>
+                              <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                                {formatDisplayDate(row.date)}
+                              </p>
+                            </div>
+                            <StatusBadge status={row.status} dark={isDark} />
+                          </div>
+                          <div
+                            className={`mt-3 grid grid-cols-2 gap-2 rounded-xl border px-3 py-2 text-xs ${
+                              isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+                            }`}
+                          >
+                            <div>
+                              <p className="ui-muted">Entry</p>
+                              <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                                {row.entryTime ? formatTime12h(row.entryTime) : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="ui-muted">Exit</p>
+                              <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                                {row.exitTime ? formatTime12h(row.exitTime) : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden overflow-x-auto md:block">
                       <table className="min-w-full text-left text-sm">
                         <thead className="ui-table-head">
                           <tr>
@@ -1430,51 +1405,25 @@ export default function App() {
                 )}
               </div>
             ) : viewTab === 'sheet' ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="ui-table-head">
-                    <tr>
-                      <th className="px-3 py-3 font-semibold sm:px-4">S.No</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Employee</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Role</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Entry</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Exit</th>
-                      <th className="px-3 py-3 font-semibold sm:px-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDayRows.map(({ employee, record, status: rowStatus }, index) => {
-                      const hasEntry = rowStatus === 'Present' && Boolean(record?.entryTime);
-                      const hasExit = Boolean(record?.exitTime);
-                      return (
-                        <tr
-                          key={employee.id}
-                          className={`ui-row ${
-                            rowStatus === 'Present'
-                              ? isDark
-                                ? 'bg-green-500/10'
-                                : 'bg-green-50/30'
-                              : rowStatus === 'Absent'
-                                ? isDark
-                                  ? 'bg-rose-500/10'
-                                  : 'bg-rose-50/30'
-                                : isDark
-                                  ? 'hover:bg-slate-800/50'
-                                  : 'hover:bg-slate-50/70'
-                          }`}
-                        >
-                          <td className="ui-muted px-3 py-3 sm:px-4">{index + 1}</td>
-                          <td className="px-3 py-3 sm:px-4">
-                            <p className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+              <div>
+                {/* Phone cards */}
+                <div className="mobile-card-list md:hidden">
+                  {pagedDayRows.map(({ employee, record, status: rowStatus }, index) => {
+                    const rowNumber = dayPage * DAY_PAGE_SIZE + index + 1;
+                    const hasEntry = rowStatus === 'Present' && Boolean(record?.entryTime);
+                    const hasExit = Boolean(record?.exitTime);
+                    return (
+                      <article key={employee.id} className="ui-soft p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="ui-muted text-[11px]">#{rowNumber}</p>
+                            <p className={`truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
                               {employee.name}
                             </p>
                             <p className="ui-muted text-xs">{employee.contact}</p>
-                          </td>
-                          <td className="px-3 py-3 sm:px-4">
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
                             <RoleBadge role={employee.role} dark={isDark} />
-                          </td>
-                          <td className="px-3 py-3 sm:px-4">
                             <StatusBadge
                               status={rowStatus}
                               dark={isDark}
@@ -1486,91 +1435,249 @@ export default function App() {
                                     : undefined
                               }
                             />
-                          </td>
-                          <td className={`px-3 py-3 font-medium tabular-nums sm:px-4 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                            {hasEntry ? formatTime12h(record!.entryTime) : '—'}
-                          </td>
-                          <td className={`px-3 py-3 font-medium tabular-nums sm:px-4 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                            {hasExit ? (
-                              formatTime12h(record!.exitTime)
-                            ) : hasEntry ? (
-                              <span className="text-amber-400">Pending</span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td className="px-3 py-3 sm:px-4">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <button
-                                onClick={() => markEntry(employee)}
-                                disabled={rowStatus === 'Absent' || hasEntry}
-                                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 ${
-                                  isDark ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-900 hover:bg-blue-950'
-                                }`}
-                                title={`Mark Entry (${formatTime12h(DEFAULT_ENTRY_TIME)})`}
-                              >
-                                <LogIn className="h-3.5 w-3.5" />
-                                Mark Entry
-                              </button>
-                              <button
-                                onClick={() => markExit(employee)}
-                                disabled={!hasEntry || hasExit}
-                                className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                title={`Mark Exit (${formatTime12h(DEFAULT_EXIT_TIME)})`}
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Mark Exit
-                              </button>
-                              <button
-                                onClick={() => markAbsent(employee)}
-                                disabled={rowStatus === 'Absent' || hasEntry}
-                                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${
-                                  isDark
-                                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
-                                    : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                                }`}
-                              >
-                                <UserX className="h-3.5 w-3.5" />
-                                Absent
-                              </button>
-                              {record && (
-                                <>
-                                  <button
-                                    onClick={() => openEditModal(record)}
-                                    className={`rounded-lg border p-1.5 ${
-                                      isDark
-                                        ? 'border-slate-700 bg-slate-950 text-slate-400 hover:text-blue-300'
-                                        : 'border-slate-200 bg-white text-slate-500 hover:text-blue-900'
-                                    }`}
-                                    title="Edit"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteRecord(record.id)}
-                                    className={`rounded-lg border p-1.5 ${
-                                      isDark
-                                        ? 'border-slate-700 bg-slate-950 text-slate-400 hover:text-rose-400'
-                                        : 'border-slate-200 bg-white text-slate-500 hover:text-rose-600'
-                                    }`}
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </>
+                          </div>
+                        </div>
+                        <div
+                          className={`mt-3 grid grid-cols-2 gap-2 rounded-xl border px-3 py-2 text-xs ${
+                            isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <p className="ui-muted">Entry</p>
+                            <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                              {hasEntry ? formatTime12h(record!.entryTime) : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="ui-muted">Exit</p>
+                            <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                              {hasExit ? (
+                                formatTime12h(record!.exitTime)
+                              ) : hasEntry ? (
+                                <span className="text-amber-400">Pending</span>
+                              ) : (
+                                '—'
                               )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-1.5">
+                          <button
+                            onClick={() => markEntry(employee)}
+                            disabled={rowStatus === 'Absent' || hasEntry}
+                            className={`inline-flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 ${
+                              isDark ? 'bg-blue-700' : 'bg-blue-900'
+                            }`}
+                          >
+                            <LogIn className="h-3.5 w-3.5" />
+                            Entry
+                          </button>
+                          <button
+                            onClick={() => markExit(employee)}
+                            disabled={!hasEntry || hasExit}
+                            className="inline-flex items-center justify-center gap-1 rounded-lg bg-green-600 px-2 py-2 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Exit
+                          </button>
+                          <button
+                            onClick={() => markAbsent(employee)}
+                            disabled={rowStatus === 'Absent' || hasEntry}
+                            className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${
+                              isDark
+                                ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                                : 'border-rose-200 bg-rose-50 text-rose-700'
+                            }`}
+                          >
+                            <UserX className="h-3.5 w-3.5" />
+                            Absent
+                          </button>
+                        </div>
+                        {record && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => openEditModal(record)}
+                              className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-semibold ${
+                                isDark
+                                  ? 'border-slate-700 text-slate-300'
+                                  : 'border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteRecord(record.id)}
+                              className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-semibold ${
+                                isDark
+                                  ? 'border-slate-700 text-rose-300'
+                                  : 'border-slate-200 text-rose-600'
+                              }`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="ui-table-head">
+                      <tr>
+                        <th className="px-3 py-3 font-semibold sm:px-4">S.No</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Employee</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Role</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Entry</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Exit</th>
+                        <th className="px-3 py-3 font-semibold sm:px-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedDayRows.map(({ employee, record, status: rowStatus }, index) => {
+                        const rowNumber = dayPage * DAY_PAGE_SIZE + index + 1;
+                        const hasEntry = rowStatus === 'Present' && Boolean(record?.entryTime);
+                        const hasExit = Boolean(record?.exitTime);
+                        return (
+                          <tr
+                            key={employee.id}
+                            className={`ui-row ${
+                              rowStatus === 'Present'
+                                ? isDark
+                                  ? 'bg-green-500/10'
+                                  : 'bg-green-50/30'
+                                : rowStatus === 'Absent'
+                                  ? isDark
+                                    ? 'bg-rose-500/10'
+                                    : 'bg-rose-50/30'
+                                  : isDark
+                                    ? 'hover:bg-slate-800/50'
+                                    : 'hover:bg-slate-50/70'
+                            }`}
+                          >
+                            <td className="ui-muted px-3 py-3 sm:px-4">{rowNumber}</td>
+                            <td className="px-3 py-3 sm:px-4">
+                              <p className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                                {employee.name}
+                              </p>
+                              <p className="ui-muted text-xs">{employee.contact}</p>
+                            </td>
+                            <td className="px-3 py-3 sm:px-4">
+                              <RoleBadge role={employee.role} dark={isDark} />
+                            </td>
+                            <td className="px-3 py-3 sm:px-4">
+                              <StatusBadge
+                                status={rowStatus}
+                                dark={isDark}
+                                detail={
+                                  hasEntry && !hasExit
+                                    ? 'On Duty'
+                                    : hasEntry && hasExit
+                                      ? 'Completed'
+                                      : undefined
+                                }
+                              />
+                            </td>
+                            <td className={`px-3 py-3 font-medium tabular-nums sm:px-4 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                              {hasEntry ? formatTime12h(record!.entryTime) : '—'}
+                            </td>
+                            <td className={`px-3 py-3 font-medium tabular-nums sm:px-4 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                              {hasExit ? (
+                                formatTime12h(record!.exitTime)
+                              ) : hasEntry ? (
+                                <span className="text-amber-400">Pending</span>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className="px-3 py-3 sm:px-4">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  onClick={() => markEntry(employee)}
+                                  disabled={rowStatus === 'Absent' || hasEntry}
+                                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 ${
+                                    isDark ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-900 hover:bg-blue-950'
+                                  }`}
+                                  title={`Mark Entry (${formatTime12h(DEFAULT_ENTRY_TIME)})`}
+                                >
+                                  <LogIn className="h-3.5 w-3.5" />
+                                  Mark Entry
+                                </button>
+                                <button
+                                  onClick={() => markExit(employee)}
+                                  disabled={!hasEntry || hasExit}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                  title={`Mark Exit (${formatTime12h(DEFAULT_EXIT_TIME)})`}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Mark Exit
+                                </button>
+                                <button
+                                  onClick={() => markAbsent(employee)}
+                                  disabled={rowStatus === 'Absent' || hasEntry}
+                                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${
+                                    isDark
+                                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
+                                      : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  <UserX className="h-3.5 w-3.5" />
+                                  Absent
+                                </button>
+                                {record && (
+                                  <>
+                                    <button
+                                      onClick={() => openEditModal(record)}
+                                      className={`rounded-lg border p-1.5 ${
+                                        isDark
+                                          ? 'border-slate-700 bg-slate-950 text-slate-400 hover:text-blue-300'
+                                          : 'border-slate-200 bg-white text-slate-500 hover:text-blue-900'
+                                      }`}
+                                      title="Edit"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteRecord(record.id)}
+                                      className={`rounded-lg border p-1.5 ${
+                                        isDark
+                                          ? 'border-slate-700 bg-slate-950 text-slate-400 hover:text-rose-400'
+                                          : 'border-slate-200 bg-white text-slate-500 hover:text-rose-600'
+                                      }`}
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <DayListPagination
+                  page={dayPage}
+                  pageCount={dayPageCount}
+                  pageSize={DAY_PAGE_SIZE}
+                  total={filteredDayRows.length}
+                  dark={isDark}
+                  onPrev={() => setDayPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setDayPage((p) => Math.min(dayPageCount - 1, p + 1))}
+                />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div>
                 <div
-                  className={`grid grid-cols-3 gap-3 border-b p-4 sm:p-5 ${
+                  className={`grid grid-cols-3 gap-2 border-b p-3 sm:gap-3 sm:p-5 ${
                     isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-100 bg-slate-50/70'
                   }`}
                 >
@@ -1578,51 +1685,104 @@ export default function App() {
                   <MiniStat label="Absent" value={stats.absent} className="text-rose-400" dark={isDark} />
                   <MiniStat label="Not Marked" value={stats.notMarked} className="text-amber-400" dark={isDark} />
                 </div>
-                <table className="min-w-full text-left text-sm">
-                  <thead className="ui-table-head">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold sm:px-5">S.No</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Employee</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Contact</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Role</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Status</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Entry</th>
-                      <th className="px-4 py-3 font-semibold sm:px-5">Exit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDayRows.map((row, index) => (
-                      <tr
-                        key={row.employee.id}
-                        className={`ui-row ${isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/70'}`}
-                      >
-                        <td className="ui-muted px-4 py-3 sm:px-5">{index + 1}</td>
-                        <td className={`px-4 py-3 font-medium sm:px-5 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                          {row.employee.name}
-                        </td>
-                        <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {row.employee.contact}
-                        </td>
-                        <td className="px-4 py-3 sm:px-5">
+
+                {/* Phone cards */}
+                <div className="mobile-card-list md:hidden">
+                  {pagedDayRows.map((row, index) => (
+                    <article key={row.employee.id} className="ui-soft p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="ui-muted text-[11px]">#{dayPage * DAY_PAGE_SIZE + index + 1}</p>
+                          <p className={`truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                            {row.employee.name}
+                          </p>
+                          <p className="ui-muted text-xs">{row.employee.contact}</p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
                           <RoleBadge role={row.employee.role} dark={isDark} />
-                        </td>
-                        <td className="px-4 py-3 sm:px-5">
                           <StatusBadge status={row.status} dark={isDark} />
-                        </td>
-                        <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-                          {row.record?.entryTime
-                            ? formatTime12h(row.record.entryTime)
-                            : '-'}
-                        </td>
-                        <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-                          {row.record?.exitTime
-                            ? formatTime12h(row.record.exitTime)
-                            : '-'}
-                        </td>
+                        </div>
+                      </div>
+                      <div
+                        className={`mt-3 grid grid-cols-2 gap-2 rounded-xl border px-3 py-2 text-xs ${
+                          isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <div>
+                          <p className="ui-muted">Entry</p>
+                          <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                            {row.record?.entryTime ? formatTime12h(row.record.entryTime) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="ui-muted">Exit</p>
+                          <p className={`font-semibold tabular-nums ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                            {row.record?.exitTime ? formatTime12h(row.record.exitTime) : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="ui-table-head">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold sm:px-5">S.No</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Employee</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Contact</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Role</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Status</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Entry</th>
+                        <th className="px-4 py-3 font-semibold sm:px-5">Exit</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {pagedDayRows.map((row, index) => (
+                        <tr
+                          key={row.employee.id}
+                          className={`ui-row ${isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/70'}`}
+                        >
+                          <td className="ui-muted px-4 py-3 sm:px-5">{dayPage * DAY_PAGE_SIZE + index + 1}</td>
+                          <td className={`px-4 py-3 font-medium sm:px-5 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                            {row.employee.name}
+                          </td>
+                          <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                            {row.employee.contact}
+                          </td>
+                          <td className="px-4 py-3 sm:px-5">
+                            <RoleBadge role={row.employee.role} dark={isDark} />
+                          </td>
+                          <td className="px-4 py-3 sm:px-5">
+                            <StatusBadge status={row.status} dark={isDark} />
+                          </td>
+                          <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            {row.record?.entryTime
+                              ? formatTime12h(row.record.entryTime)
+                              : '-'}
+                          </td>
+                          <td className={`px-4 py-3 tabular-nums sm:px-5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            {row.record?.exitTime
+                              ? formatTime12h(row.record.exitTime)
+                              : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <DayListPagination
+                  page={dayPage}
+                  pageCount={dayPageCount}
+                  pageSize={DAY_PAGE_SIZE}
+                  total={filteredDayRows.length}
+                  dark={isDark}
+                  onPrev={() => setDayPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setDayPage((p) => Math.min(dayPageCount - 1, p + 1))}
+                />
               </div>
             )}
           </section>
@@ -1637,7 +1797,7 @@ export default function App() {
           }}
         >
           <div
-            className={`w-full max-w-lg animate-slide-up rounded-t-3xl p-6 shadow-2xl sm:rounded-3xl ${
+            className={`max-h-[min(92dvh,100%)] w-full max-w-lg animate-slide-up overflow-y-auto rounded-t-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl sm:p-6 ${
               isDark ? 'border border-slate-800 bg-slate-900' : 'bg-white'
             }`}
           >
@@ -1882,6 +2042,258 @@ export default function App() {
   );
 }
 
+function DayListPagination({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  dark,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  dark: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  if (total === 0) return null;
+
+  const from = page * pageSize + 1;
+  const to = Math.min(total, (page + 1) * pageSize);
+
+  return (
+    <div
+      className={`flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 ${
+        dark ? 'border-slate-800' : 'border-slate-100'
+      }`}
+    >
+      <p className={`text-center text-xs sm:text-left ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+        Showing <span className={dark ? 'font-semibold text-slate-200' : 'font-semibold text-slate-700'}>{from}-{to}</span> of{' '}
+        <span className={dark ? 'font-semibold text-slate-200' : 'font-semibold text-slate-700'}>{total}</span>
+        {' · '}
+        Page {page + 1} / {pageCount}
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:w-auto">
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={page <= 0}
+          className={`inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            dark
+              ? 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800'
+              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Prev
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={page >= pageCount - 1}
+          className={`inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            dark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
+          }`}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeSidebarBody({
+  isDark,
+  employees,
+  sidebarEmployees,
+  dayRows,
+  sidebarSearch,
+  setSidebarSearch,
+  showClose,
+  onClose,
+  onAddEmployee,
+  onEditEmployee,
+  onDeleteEmployee,
+  onMarkAttendance,
+  showDesktopAdd,
+}: {
+  isDark: boolean;
+  employees: Employee[];
+  sidebarEmployees: Employee[];
+  dayRows: ReturnType<typeof buildDayRows>;
+  sidebarSearch: string;
+  setSidebarSearch: (value: string) => void;
+  showClose: boolean;
+  onClose: () => void;
+  onAddEmployee: () => void;
+  onEditEmployee: (employee: Employee) => void;
+  onDeleteEmployee: (id: string) => void;
+  onMarkAttendance: (employeeId: string) => void;
+  showDesktopAdd: boolean;
+}) {
+  return (
+    <>
+      <div
+        className={`flex items-center justify-between gap-2 border-b px-4 py-3 ${
+          isDark ? 'border-slate-800' : 'border-slate-100'
+        }`}
+      >
+        <div className="min-w-0">
+          <h2 className="ui-title">Employee List</h2>
+          <p className="ui-muted text-xs">{employees.length} total employees</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-900'
+            }`}
+          >
+            {sidebarEmployees.length}
+          </span>
+          {showClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className={`rounded-lg p-1.5 ${
+                isDark
+                  ? 'text-slate-400 hover:bg-slate-800'
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+              aria-label="Close sidebar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3 px-4 py-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={sidebarSearch}
+            onChange={(e) => setSidebarSearch(e.target.value)}
+            placeholder="Search name, contact, role"
+            className="ui-field pl-9"
+          />
+        </div>
+        {showDesktopAdd && (
+          <button
+            type="button"
+            onClick={onAddEmployee}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white ${
+              isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
+            }`}
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Employee
+          </button>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        {employees.length === 0 ? (
+          <p
+            className={`mx-1 rounded-xl border border-dashed px-3 py-10 text-center text-sm ${
+              isDark ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            No employees yet. Add name, contact, and role to start.
+          </p>
+        ) : sidebarEmployees.length === 0 ? (
+          <p className="ui-muted px-2 py-8 text-center text-sm">No employee matched your search.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sidebarEmployees.map((emp) => {
+              const dayStatus =
+                dayRows.find((r) => r.employee.id === emp.id)?.status ?? 'Not Marked';
+              return (
+                <li key={emp.id} className="ui-soft p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`truncate text-sm font-semibold ${
+                          isDark ? 'text-slate-100' : 'text-slate-900'
+                        }`}
+                      >
+                        {emp.name}
+                      </p>
+                      <p
+                        className={`truncate text-xs font-medium ${
+                          isDark ? 'text-blue-300' : 'text-blue-900'
+                        }`}
+                      >
+                        {emp.role}
+                      </p>
+                      <p className="ui-muted mt-0.5 flex items-center gap-1 truncate text-xs">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        {emp.contact}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        onClick={() => onEditEmployee(emp)}
+                        className={`rounded-lg p-1.5 ${
+                          isDark
+                            ? 'text-slate-400 hover:bg-blue-500/15 hover:text-blue-300'
+                            : 'text-slate-400 hover:bg-blue-50 hover:text-blue-900'
+                        }`}
+                        title="Edit employee"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteEmployee(emp.id)}
+                        className={`rounded-lg p-1.5 ${
+                          isDark
+                            ? 'text-slate-500 hover:bg-rose-500/15 hover:text-rose-400'
+                            : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+                        }`}
+                        title="Remove employee"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <StatusBadge status={dayStatus} dark={isDark} />
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onEditEmployee(emp)}
+                        className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                          isDark
+                            ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onMarkAttendance(emp.id)}
+                        className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                          isDark
+                            ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
+                            : 'border-blue-100 bg-white text-blue-900 hover:bg-blue-50'
+                        }`}
+                      >
+                        Mark
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -1910,14 +2322,14 @@ function StatCard({
       };
 
   return (
-    <div className="ui-panel p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="ui-muted text-xs font-medium">{label}</span>
-        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${tones[tone]}`}>
+    <div className="ui-panel p-3 sm:p-4">
+      <div className="mb-1.5 flex items-center justify-between gap-1 sm:mb-2">
+        <span className="ui-muted text-[11px] font-medium leading-tight sm:text-xs">{label}</span>
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg sm:h-7 sm:w-7 ${tones[tone]}`}>
           {icon}
         </span>
       </div>
-      <p className={`font-display text-2xl font-bold ${dark ? 'text-slate-100' : 'text-slate-900'}`}>
+      <p className={`font-display text-xl font-bold sm:text-2xl ${dark ? 'text-slate-100' : 'text-slate-900'}`}>
         {value}
       </p>
     </div>
@@ -1994,7 +2406,10 @@ function RoleBadge({ role, dark = false }: { role: EmployeeRole; dark?: boolean 
       };
 
   return (
-    <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${styles[role]}`}>
+    <span
+      className={`inline-flex max-w-[10rem] truncate rounded-md border px-2 py-0.5 text-[11px] font-medium sm:max-w-none sm:text-xs ${styles[role]}`}
+      title={role}
+    >
       {role}
     </span>
   );
