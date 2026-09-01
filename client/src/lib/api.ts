@@ -50,6 +50,7 @@ export async function apiCreateEmployee(input: {
   name: string;
   contact: string;
   role: EmployeeRole;
+  joiningDate?: string;
 }) {
   return request<Employee>('/employees', {
     method: 'POST',
@@ -59,7 +60,7 @@ export async function apiCreateEmployee(input: {
 
 export async function apiUpdateEmployee(
   id: string,
-  input: { name: string; contact: string; role: EmployeeRole }
+  input: { name: string; contact: string; role: EmployeeRole; joiningDate?: string }
 ) {
   return request<Employee>(`/employees/${id}`, {
     method: 'PUT',

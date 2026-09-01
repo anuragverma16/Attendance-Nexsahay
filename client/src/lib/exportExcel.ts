@@ -11,6 +11,7 @@ import {
   getYear,
   isDateInRange,
   monthYearToISO,
+  toISODate,
 } from './dateRanges';
 import type { AttendanceRecord, DayAttendanceRow, Employee } from './types';
 import { DEFAULT_ENTRY_TIME, DEFAULT_EXIT_TIME, formatTime12h } from './types';
@@ -359,6 +360,23 @@ export function exportPeriodReportToExcel(options: {
   return { label: periodLabel, count: matrixRows.length };
 }
 
+/**
+ * Date the employee started (joined), as YYYY-MM-DD. Days before this are excluded
+ * from reports. Prefers the explicit Joining Date field; falls back to the date of
+ * their first Present attendance record, then to their record-creation date.
+ */
+function employeeStartISO(employee: Employee, records: AttendanceRecord[]) {
+  if (employee.joiningDate) return employee.joiningDate;
+
+  const firstPresent = records
+    .filter((r) => r.employeeId === employee.id && r.status === 'Present')
+    .map((r) => r.date)
+    .sort()[0];
+  if (firstPresent) return firstPresent;
+
+  return toISODate(new Date(employee.createdAt));
+}
+
 export function buildEmployeeMonthRows(
   employee: Employee,
   records: AttendanceRecord[],
@@ -366,12 +384,17 @@ export function buildEmployeeMonthRows(
   year: number
 ) {
   const range = getMonthRange(monthYearToISO(month, year));
-  const dates = eachDateInRange(range.startISO, range.endISO);
+  const startISO =
+    employeeStartISO(employee, records) > range.startISO
+      ? employeeStartISO(employee, records)
+      : range.startISO;
+  if (startISO > range.endISO) return [];
+  const dates = eachDateInRange(startISO, range.endISO);
 
   return dates.map((date) => {
     const record =
       records.find((r) => r.employeeId === employee.id && r.date === date) ?? null;
-    const status = record ? record.status : ('Not Marked' as const);
+    const status = record ? record.status : ('Holiday' as const);
     return {
       date,
       record,
@@ -388,7 +411,7 @@ export function exportEmployeeMonthReport(options: {
   records: AttendanceRecord[];
   month: number;
   year: number;
-  statusFilter?: 'all' | 'Present' | 'Absent' | 'Not Marked';
+  statusFilter?: 'all' | 'Present' | 'Absent' | 'Holiday';
 }) {
   const { employee, records, month, year, statusFilter = 'all' } = options;
   const range = getMonthRange(monthYearToISO(month, year));
@@ -414,7 +437,7 @@ export function exportEmployeeMonthReport(options: {
   const allMonthRows = buildEmployeeMonthRows(employee, records, month, year);
   const present = allMonthRows.filter((r) => r.status === 'Present').length;
   const absent = allMonthRows.filter((r) => r.status === 'Absent').length;
-  const notMarked = allMonthRows.filter((r) => r.status === 'Not Marked').length;
+  const holiday = allMonthRows.filter((r) => r.status === 'Holiday').length;
 
   const safeName = employee.name.replace(/[^\w.-]+/g, '_');
   writeWorkbook(
@@ -429,11 +452,12 @@ export function exportEmployeeMonthReport(options: {
           ['Role', employee.role],
           ['Month', range.label],
           ['Year', year],
+          ['Employee Start Date', formatDisplayDate(employeeStartISO(employee, records))],
           ['Status Filter', statusFilter],
           ['Total Days', allMonthRows.length],
           ['Present Days', present],
           ['Absent Days', absent],
-          ['Not Marked Days', notMarked],
+          ['Holiday Days', holiday],
           ['Rows In Sheet', detail.length],
           ...standardTimingRows(),
         ],
@@ -450,7 +474,7 @@ export function exportEmployeeMonthReport(options: {
     label: `${employee.name} · ${range.label}`,
     present,
     absent,
-    notMarked,
+    holiday,
     count: detail.length,
   };
 }

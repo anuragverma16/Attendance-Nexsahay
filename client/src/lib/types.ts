@@ -11,6 +11,7 @@ export type Employee = {
   name: string;
   contact: string;
   role: EmployeeRole;
+  joiningDate: string; // YYYY-MM-DD; empty if not set
   createdAt: string;
 };
 

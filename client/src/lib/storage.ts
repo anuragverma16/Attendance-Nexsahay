@@ -47,6 +47,7 @@ function normalizeEmployee(raw: Record<string, unknown>): Employee | null {
     name: raw.name,
     contact: typeof raw.contact === 'string' ? raw.contact : '',
     role,
+    joiningDate: typeof raw.joiningDate === 'string' ? raw.joiningDate : '',
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
   };
 }

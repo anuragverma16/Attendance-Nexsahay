@@ -115,11 +115,12 @@ export default function App() {
   const [searchEmployeeId, setSearchEmployeeId] = useState('');
   const [searchMonth, setSearchMonth] = useState(() => parseISODate(todayISO()).getMonth() + 1);
   const [searchYear, setSearchYear] = useState(() => getYear(todayISO()));
-  const [searchStatus, setSearchStatus] = useState<'all' | AttendanceStatus | 'Not Marked'>('all');
+  const [searchStatus, setSearchStatus] = useState<'all' | AttendanceStatus | 'Holiday'>('all');
 
   const [empName, setEmpName] = useState('');
   const [empContact, setEmpContact] = useState('');
   const [empRole, setEmpRole] = useState<EmployeeRole>('BDE');
+  const [empJoiningDate, setEmpJoiningDate] = useState('');
 
   const [employeeId, setEmployeeId] = useState('');
   const [attDate, setAttDate] = useState(todayISO());
@@ -210,6 +211,7 @@ export default function App() {
     setEmpName('');
     setEmpContact('');
     setEmpRole('BDE');
+    setEmpJoiningDate(todayISO());
     setModal('employee');
   };
 
@@ -218,6 +220,7 @@ export default function App() {
     setEmpName(employee.name);
     setEmpContact(employee.contact);
     setEmpRole(employee.role);
+    setEmpJoiningDate(employee.joiningDate || '');
     setModal('employee');
     setSidebarOpen(false);
   };
@@ -273,10 +276,15 @@ export default function App() {
 
     try {
       if (editingEmployee) {
-        await apiUpdateEmployee(editingEmployee.id, { name, contact, role: empRole });
+        await apiUpdateEmployee(editingEmployee.id, {
+          name,
+          contact,
+          role: empRole,
+          joiningDate: empJoiningDate,
+        });
         setNotice(`Employee “${name}” updated.`);
       } else {
-        await apiCreateEmployee({ name, contact, role: empRole });
+        await apiCreateEmployee({ name, contact, role: empRole, joiningDate: empJoiningDate });
         setNotice(`Employee “${name}” added.`);
       }
       await refreshData();
@@ -365,6 +373,7 @@ export default function App() {
         name: editing!.employeeName,
         contact: editing!.employeeContact,
         role: editing!.employeeRole,
+        joiningDate: '',
         createdAt: editing!.createdAt,
       } as Employee);
 
@@ -496,14 +505,14 @@ export default function App() {
 
   const employeeMonthStats = useMemo(() => {
     if (!searchEmployee) {
-      return { present: 0, absent: 0, notMarked: 0, total: 0 };
+      return { present: 0, absent: 0, holiday: 0, total: 0 };
     }
     const all = buildEmployeeMonthRows(searchEmployee, records, searchMonth, searchYear);
     return {
       total: all.length,
       present: all.filter((r) => r.status === 'Present').length,
       absent: all.filter((r) => r.status === 'Absent').length,
-      notMarked: all.filter((r) => r.status === 'Not Marked').length,
+      holiday: all.filter((r) => r.status === 'Holiday').length,
     };
   }, [searchEmployee, records, searchMonth, searchYear]);
 
@@ -1261,7 +1270,7 @@ export default function App() {
                   }`}
                 >
                   <div className="flex flex-wrap gap-2">
-                    {(['all', 'Present', 'Absent', 'Not Marked'] as const).map((s) => (
+                    {(['all', 'Present', 'Absent', 'Holiday'] as const).map((s) => (
                       <button
                         key={s}
                         onClick={() => setSearchStatus(s)}
@@ -1271,8 +1280,8 @@ export default function App() {
                               ? 'bg-green-600 text-white'
                               : s === 'Absent'
                                 ? 'bg-rose-600 text-white'
-                                : s === 'Not Marked'
-                                  ? 'bg-amber-500 text-white'
+                                : s === 'Holiday'
+                                  ? 'bg-indigo-500 text-white'
                                   : isDark
                                     ? 'bg-green-600 text-white'
                                     : 'bg-blue-900 text-white'
@@ -1315,7 +1324,7 @@ export default function App() {
                       <MiniStat label="Days" value={employeeMonthStats.total} className={isDark ? 'text-slate-100' : 'text-slate-800'} dark={isDark} />
                       <MiniStat label="Present" value={employeeMonthStats.present} className="text-green-500" dark={isDark} />
                       <MiniStat label="Absent" value={employeeMonthStats.absent} className="text-rose-400" dark={isDark} />
-                      <MiniStat label="Not Marked" value={employeeMonthStats.notMarked} className="text-amber-400" dark={isDark} />
+                      <MiniStat label="Holiday" value={employeeMonthStats.holiday} className="text-indigo-400" dark={isDark} />
                     </div>
 
                     {/* Phone cards */}
@@ -1869,6 +1878,21 @@ export default function App() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Joining date
+                  </label>
+                  <input
+                    type="date"
+                    value={empJoiningDate}
+                    onChange={(e) => setEmpJoiningDate(e.target.value)}
+                    className="ui-field px-4 py-3"
+                  />
+                  <p className="ui-muted mt-1 text-xs">
+                    Attendance is counted from this date. Reports treat earlier days as
+                    not applicable, and later days with no record as a Holiday.
+                  </p>
+                </div>
                 <div className="flex gap-3 pt-1">
                   <button type="button" onClick={closeModal} className="ui-btn-ghost flex-1 justify-center py-3">
                     Cancel
@@ -2364,7 +2388,7 @@ function StatusBadge({
   detail,
   dark = false,
 }: {
-  status: AttendanceStatus | 'Not Marked';
+  status: AttendanceStatus | 'Not Marked' | 'Holiday';
   detail?: string;
   dark?: boolean;
 }) {
@@ -2373,11 +2397,13 @@ function StatusBadge({
         Present: 'border-green-500/40 bg-green-500/15 text-green-300',
         Absent: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
         'Not Marked': 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+        Holiday: 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300',
       }
     : {
         Present: 'border-green-200 bg-green-50 text-green-700',
         Absent: 'border-rose-200 bg-rose-50 text-rose-700',
         'Not Marked': 'border-amber-200 bg-amber-50 text-amber-700',
+        Holiday: 'border-indigo-200 bg-indigo-50 text-indigo-700',
       };
 
   return (

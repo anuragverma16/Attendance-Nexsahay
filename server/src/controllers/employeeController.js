@@ -3,6 +3,16 @@ import { Employee, EMPLOYEE_ROLES } from '../models/Employee.js';
 import { mapEmployee } from '../utils/mapDoc.js';
 import { fail, ok } from '../utils/response.js';
 
+const JOINING_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseJoiningDate(value) {
+  const joiningDate = String(value || '').trim();
+  if (joiningDate && !JOINING_DATE_RE.test(joiningDate)) {
+    throw new Error('Joining date must be in YYYY-MM-DD format.');
+  }
+  return joiningDate;
+}
+
 export async function getEmployees(_req, res) {
   try {
     const employees = await Employee.find().sort({ name: 1 });
@@ -28,7 +38,14 @@ export async function createEmployee(req, res) {
       return fail(res, 400, 'Invalid employee role.');
     }
 
-    const employee = await Employee.create({ name, contact, role });
+    let joiningDate;
+    try {
+      joiningDate = parseJoiningDate(req.body?.joiningDate);
+    } catch (error) {
+      return fail(res, 400, error.message);
+    }
+
+    const employee = await Employee.create({ name, contact, role, joiningDate });
     return ok(res, mapEmployee(employee));
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to create employee.');
@@ -51,9 +68,19 @@ export async function updateEmployee(req, res) {
       return fail(res, 400, 'Invalid employee role.');
     }
 
+    let joiningDate;
+    try {
+      joiningDate = parseJoiningDate(req.body?.joiningDate);
+    } catch (error) {
+      return fail(res, 400, error.message);
+    }
+
+    const update = { name, contact, role };
+    if (joiningDate) update.joiningDate = joiningDate;
+
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
-      { name, contact, role },
+      update,
       { new: true, runValidators: true }
     );
 

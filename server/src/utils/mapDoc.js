@@ -6,6 +6,7 @@ export function mapEmployee(doc) {
     name: obj.name,
     contact: obj.contact,
     role: obj.role,
+    joiningDate: obj.joiningDate || '',
     createdAt: obj.createdAt
       ? new Date(obj.createdAt).toISOString()
       : new Date().toISOString(),

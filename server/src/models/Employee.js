@@ -21,6 +21,11 @@ const employeeSchema = new mongoose.Schema(
       required: true,
       enum: EMPLOYEE_ROLES,
     },
+    joiningDate: {
+      type: String,
+      match: [/^\d{4}-\d{2}-\d{2}$/, 'Joining date must be YYYY-MM-DD'],
+      default: '',
+    },
   },
   { timestamps: { createdAt: true, updatedAt: true } }
 );
