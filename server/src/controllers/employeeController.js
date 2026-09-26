@@ -1,5 +1,6 @@
 import { Attendance } from '../models/Attendance.js';
 import { Employee, EMPLOYEE_ROLES } from '../models/Employee.js';
+import { Role } from '../models/Role.js';
 import { mapEmployee } from '../utils/mapDoc.js';
 import { fail, ok } from '../utils/response.js';
 
@@ -15,7 +16,7 @@ function parseJoiningDate(value) {
 
 export async function getEmployees(_req, res) {
   try {
-    const employees = await Employee.find().sort({ name: 1 });
+    const employees = await Employee.find().sort({ name: 1 }).lean();
     return ok(res, employees.map(mapEmployee));
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch employees.');
@@ -34,7 +35,9 @@ export async function createEmployee(req, res) {
     if (!/^\d{10}$/.test(contact)) {
       return fail(res, 400, 'Contact number must be 10 digits.');
     }
-    if (!EMPLOYEE_ROLES.includes(role)) {
+
+    const validRole = await Role.findOne({ name: role }).lean();
+    if (!validRole && !EMPLOYEE_ROLES.includes(role)) {
       return fail(res, 400, 'Invalid employee role.');
     }
 
@@ -64,7 +67,9 @@ export async function updateEmployee(req, res) {
     if (!/^\d{10}$/.test(contact)) {
       return fail(res, 400, 'Contact number must be 10 digits.');
     }
-    if (!EMPLOYEE_ROLES.includes(role)) {
+
+    const validRole = await Role.findOne({ name: role }).lean();
+    if (!validRole && !EMPLOYEE_ROLES.includes(role)) {
       return fail(res, 400, 'Invalid employee role.');
     }
 

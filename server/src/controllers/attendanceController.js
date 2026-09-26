@@ -13,10 +13,9 @@ export async function getAttendance(req, res) {
       filter.employeeId = req.query.employeeId;
     }
 
-    const rows = await Attendance.find(filter).sort({
-      date: -1,
-      employeeName: 1,
-    });
+    const rows = await Attendance.find(filter)
+      .sort({ date: -1, employeeName: 1 })
+      .lean();
     return ok(res, rows.map(mapAttendance));
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch attendance.');
@@ -114,17 +113,33 @@ export async function deleteAttendance(req, res) {
 export async function getSummary(req, res) {
   try {
     const date = String(req.query.date || '');
-    const filter = date ? { date } : {};
-    const [employees, rows] = await Promise.all([
+    const matchStage = date ? { $match: { date } } : { $match: {} };
+
+    const [employeeCount, summary] = await Promise.all([
       Employee.countDocuments(),
-      Attendance.find(filter),
+      Attendance.aggregate([
+        matchStage,
+        {
+          $group: {
+            _id: null,
+            records: { $sum: 1 },
+            present: {
+              $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] },
+            },
+            absent: {
+              $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] },
+            },
+          },
+        },
+      ]),
     ]);
 
+    const result = summary[0] || { records: 0, present: 0, absent: 0 };
     return ok(res, {
-      employees,
-      records: rows.length,
-      present: rows.filter((r) => r.status === 'Present').length,
-      absent: rows.filter((r) => r.status === 'Absent').length,
+      employees: employeeCount,
+      records: result.records,
+      present: result.present,
+      absent: result.absent,
     });
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch summary.');

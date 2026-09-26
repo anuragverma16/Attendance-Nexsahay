@@ -3,7 +3,7 @@ import { ok, fail } from '../utils/response.js';
 
 export const getAllRoles = async (req, res) => {
   try {
-    const roles = await Role.find().sort({ isDefault: -1, name: 1 });
+    const roles = await Role.find().sort({ isDefault: -1, name: 1 }).lean();
     return ok(res, roles);
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch roles.');
@@ -96,15 +96,19 @@ export const initializeDefaultRoles = async () => {
   try {
     const defaultRoles = ['Admin', 'Manager', 'BDE', 'Graphic Designer', 'Content creator', 'IT'];
 
-    for (const roleName of defaultRoles) {
-      const existing = await Role.findOne({ name: roleName });
-      if (!existing) {
-        await Role.create({
-          name: roleName,
-          description: `${roleName} role`,
-          isDefault: true,
-        });
-      }
+    const existingRoles = await Role.find({ name: { $in: defaultRoles } }).lean();
+    const existingNames = new Set(existingRoles.map((r) => r.name));
+
+    const rolesToCreate = defaultRoles
+      .filter((name) => !existingNames.has(name))
+      .map((name) => ({
+        name,
+        description: `${name} role`,
+        isDefault: true,
+      }));
+
+    if (rolesToCreate.length > 0) {
+      await Role.insertMany(rolesToCreate);
     }
   } catch (error) {
     console.error('Error initializing default roles:', error);

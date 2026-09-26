@@ -219,7 +219,8 @@ export default function App() {
     setEditingEmployee(null);
     setEmpName('');
     setEmpContact('');
-    setEmpRole((roles[0]?.name as EmployeeRole) || 'BDE');
+    const defaultRole = roles.length > 0 ? roles[0].name : 'BDE';
+    setEmpRole(defaultRole as EmployeeRole);
     setEmpJoiningDate(todayISO());
     setModal('employee');
   };
@@ -276,7 +277,20 @@ export default function App() {
     e.preventDefault();
     const name = empName.trim();
     const contact = empContact.trim();
-    if (!name || !contact) return;
+    const role = empRole.trim();
+
+    if (!name) {
+      setNotice('Employee name is required.');
+      return;
+    }
+    if (!contact) {
+      setNotice('Contact number is required.');
+      return;
+    }
+    if (!role) {
+      setNotice('Please select a role.');
+      return;
+    }
 
     if (!/^\d{10}$/.test(contact)) {
       setNotice('Contact number must be 10 digits.');
@@ -288,12 +302,12 @@ export default function App() {
         await apiUpdateEmployee(editingEmployee.id, {
           name,
           contact,
-          role: empRole,
+          role: role as EmployeeRole,
           joiningDate: empJoiningDate,
         });
         setNotice(`Employee “${name}” updated.`);
       } else {
-        await apiCreateEmployee({ name, contact, role: empRole, joiningDate: empJoiningDate });
+        await apiCreateEmployee({ name, contact, role: role as EmployeeRole, joiningDate: empJoiningDate });
         setNotice(`Employee “${name}” added.`);
       }
       await refreshData();

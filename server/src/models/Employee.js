@@ -34,7 +34,5 @@ const employeeSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: true } }
 );
 
-employeeSchema.index({ name: 1 });
-
 export const Employee = mongoose.model('Employee', employeeSchema);
 export { EMPLOYEE_ROLES };
