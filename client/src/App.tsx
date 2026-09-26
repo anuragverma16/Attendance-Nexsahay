@@ -44,6 +44,7 @@ import {
   apiDeleteEmployee,
   apiGetAttendance,
   apiGetEmployees,
+  apiGetRoles,
   apiLogin,
   apiSeed,
   apiUpdateAttendance,
@@ -68,6 +69,7 @@ import {
   type AttendanceStatus,
   type Employee,
   type EmployeeRole,
+  type Role,
 } from '@/lib/types';
 
 type Modal = 'none' | 'employee' | 'attendance' | 'edit-attendance';
@@ -98,6 +100,7 @@ export default function App() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [roleFilter, setRoleFilter] = useState<'all' | EmployeeRole>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'Not Marked'>('all');
@@ -131,9 +134,10 @@ export default function App() {
   const refreshData = async () => {
     setLoadingData(true);
     try {
-      const [emps, atts] = await Promise.all([apiGetEmployees(), apiGetAttendance()]);
+      const [emps, atts, rolesList] = await Promise.all([apiGetEmployees(), apiGetAttendance(), apiGetRoles()]);
       setEmployees(emps);
       setRecords(atts);
+      setRoles(rolesList);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Failed to load data from backend.');
     } finally {
@@ -210,7 +214,7 @@ export default function App() {
     setEditingEmployee(null);
     setEmpName('');
     setEmpContact('');
-    setEmpRole('BDE');
+    setEmpRole((roles[0]?.name as EmployeeRole) || 'BDE');
     setEmpJoiningDate(todayISO());
     setModal('employee');
   };
@@ -888,11 +892,19 @@ export default function App() {
                 className="ui-field"
               >
                 <option value="all">All roles</option>
-                {EMPLOYEE_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
+                {roles.length > 0 ? (
+                  roles.map((role) => (
+                    <option key={role._id} value={role.name}>
+                      {role.name}
+                    </option>
+                  ))
+                ) : (
+                  EMPLOYEE_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div>
@@ -1871,11 +1883,19 @@ export default function App() {
                     onChange={(e) => setEmpRole(e.target.value as EmployeeRole)}
                     className="ui-field px-4 py-3"
                   >
-                    {EMPLOYEE_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
+                    {roles.length > 0 ? (
+                      roles.map((role) => (
+                        <option key={role._id} value={role.name}>
+                          {role.name} {role.isDefault && '(System)'}
+                        </option>
+                      ))
+                    ) : (
+                      EMPLOYEE_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div>
