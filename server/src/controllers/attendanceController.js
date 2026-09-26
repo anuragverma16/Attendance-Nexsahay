@@ -13,24 +13,11 @@ export async function getAttendance(req, res) {
       filter.employeeId = req.query.employeeId;
     }
 
-    const limit = Math.min(Number(req.query.limit) || 1000, 5000);
-    const skip = Math.max(Number(req.query.skip) || 0, 0);
+    const rows = await Attendance.find(filter)
+      .sort({ date: -1, employeeName: 1 })
+      .lean();
 
-    const [rows, total] = await Promise.all([
-      Attendance.find(filter)
-        .sort({ date: -1, employeeName: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Attendance.countDocuments(filter),
-    ]);
-
-    return ok(res, {
-      data: rows.map(mapAttendance),
-      total,
-      limit,
-      skip,
-    });
+    return ok(res, rows.map(mapAttendance));
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch attendance.');
   }
