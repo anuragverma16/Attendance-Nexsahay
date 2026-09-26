@@ -1,4 +1,4 @@
-import type { AttendanceRecord, AttendanceStatus, Employee, EmployeeRole } from './types';
+import type { AttendanceRecord, AttendanceStatus, Employee, EmployeeRole, Role } from './types';
 
 const API_BASE = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -113,4 +113,26 @@ export async function apiSeed() {
   return request<{ employees: number; attendance: number; message: string }>('/seed', {
     method: 'POST',
   });
+}
+
+export async function apiGetRoles() {
+  return request<Role[]>('/roles');
+}
+
+export async function apiCreateRole(input: { name: string; description?: string; isDefault?: boolean }) {
+  return request<Role>('/roles', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function apiUpdateRole(id: string, input: { name?: string; description?: string; isDefault?: boolean }) {
+  return request<Role>(`/roles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function apiDeleteRole(id: string) {
+  return request<{ message: string }>(`/roles/${id}`, { method: 'DELETE' });
 }

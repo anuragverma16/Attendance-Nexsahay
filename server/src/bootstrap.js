@@ -2,6 +2,7 @@ import { connectDB } from './config/db.js';
 import { Admin } from './models/Admin.js';
 import { Employee } from './models/Employee.js';
 import { seedDatabase } from './utils/seedData.js';
+import { initializeDefaultRoles } from './controllers/roleController.js';
 
 let readyPromise = null;
 
@@ -9,6 +10,8 @@ export async function ensureReady() {
   if (!readyPromise) {
     readyPromise = (async () => {
       await connectDB();
+
+      await initializeDefaultRoles();
 
       const [employeeCount, adminCount] = await Promise.all([
         Employee.countDocuments(),

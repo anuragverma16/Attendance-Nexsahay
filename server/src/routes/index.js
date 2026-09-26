@@ -3,6 +3,7 @@ import { ok } from '../utils/response.js';
 import attendanceRoutes from './attendanceRoutes.js';
 import authRoutes from './authRoutes.js';
 import employeeRoutes from './employeeRoutes.js';
+import roleRoutes from './roleRoutes.js';
 import seedRoutes from './seedRoutes.js';
 import statsRoutes from './statsRoutes.js';
 
@@ -18,6 +19,7 @@ router.get('/health', (_req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/employees', employeeRoutes);
+router.use('/roles', roleRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/stats', statsRoutes);
 router.use('/seed', seedRoutes);

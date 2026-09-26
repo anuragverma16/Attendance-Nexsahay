@@ -19,7 +19,11 @@ const employeeSchema = new mongoose.Schema(
     role: {
       type: String,
       required: true,
-      enum: EMPLOYEE_ROLES,
+    },
+    roleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Role',
+      default: null,
     },
     joiningDate: {
       type: String,
