@@ -3,7 +3,11 @@ import { ok, fail } from '../utils/response.js';
 
 export const getAllRoles = async (req, res) => {
   try {
-    const roles = await Role.find().sort({ isDefault: -1, name: 1 }).lean();
+    const roles = await Role.find()
+      .select('_id name description isDefault createdAt')
+      .sort({ isDefault: -1, name: 1 })
+      .lean()
+      .exec();
     return ok(res, roles);
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch roles.');

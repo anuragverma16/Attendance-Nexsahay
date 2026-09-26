@@ -13,10 +13,24 @@ export async function getAttendance(req, res) {
       filter.employeeId = req.query.employeeId;
     }
 
-    const rows = await Attendance.find(filter)
-      .sort({ date: -1, employeeName: 1 })
-      .lean();
-    return ok(res, rows.map(mapAttendance));
+    const limit = Math.min(Number(req.query.limit) || 1000, 5000);
+    const skip = Math.max(Number(req.query.skip) || 0, 0);
+
+    const [rows, total] = await Promise.all([
+      Attendance.find(filter)
+        .sort({ date: -1, employeeName: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Attendance.countDocuments(filter),
+    ]);
+
+    return ok(res, {
+      data: rows.map(mapAttendance),
+      total,
+      limit,
+      skip,
+    });
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch attendance.');
   }
@@ -30,8 +44,6 @@ export async function upsertAttendance(req, res) {
     const entryTime = String(req.body?.entryTime || '');
     const exitTime = String(req.body?.exitTime || '');
 
-    const employee = await Employee.findById(employeeId);
-    if (!employee) return fail(res, 404, 'Employee not found.');
     if (!date) return fail(res, 400, 'Date is required.');
     if (status !== 'Present' && status !== 'Absent') {
       return fail(res, 400, 'Status must be Present or Absent.');
@@ -40,8 +52,13 @@ export async function upsertAttendance(req, res) {
       return fail(res, 400, 'Entry time is required for Present.');
     }
 
+    const employee = await Employee.findById(employeeId).select(
+      'name contact role'
+    ).lean();
+    if (!employee) return fail(res, 404, 'Employee not found.');
+
     const payload = {
-      employeeId: employee._id,
+      employeeId: employeeId,
       employeeName: employee.name,
       employeeContact: employee.contact,
       employeeRole: employee.role,
@@ -52,10 +69,10 @@ export async function upsertAttendance(req, res) {
     };
 
     const record = await Attendance.findOneAndUpdate(
-      { employeeId: employee._id, date },
+      { employeeId, date },
       payload,
-      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
-    );
+      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: false }
+    ).lean();
 
     return ok(res, mapAttendance(record));
   } catch (error) {

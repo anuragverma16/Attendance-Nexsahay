@@ -5,6 +5,10 @@ import routes from './routes/index.js';
 
 const app = express();
 
+// Trust proxy for better performance
+app.set('trust proxy', 1);
+
+// CORS with optimized settings
 app.use(
   cors({
     origin(origin, callback) {
@@ -15,9 +19,24 @@ app.use(
       callback(null, false);
     },
     credentials: true,
+    maxAge: 86400, // Cache CORS preflight for 24 hours
   })
 );
-app.use(express.json());
+
+// Optimized JSON parsing with size limit
+app.use(express.json({ limit: '1mb' }));
+
+// Request timing middleware
+app.use((req, res, next) => {
+  req.startTime = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - req.startTime;
+    if (duration > 100) {
+      console.log(`[${req.method}] ${req.path} - ${duration}ms`);
+    }
+  });
+  next();
+});
 
 app.use('/api', routes);
 

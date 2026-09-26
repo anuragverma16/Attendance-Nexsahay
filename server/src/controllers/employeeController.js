@@ -16,7 +16,11 @@ function parseJoiningDate(value) {
 
 export async function getEmployees(_req, res) {
   try {
-    const employees = await Employee.find().sort({ name: 1 }).lean();
+    const employees = await Employee.find()
+      .select('_id name contact role roleId joiningDate createdAt')
+      .sort({ name: 1 })
+      .lean()
+      .exec();
     return ok(res, employees.map(mapEmployee));
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to fetch employees.');
