@@ -40,8 +40,10 @@ import {
 } from '@/lib/exportExcel';
 import {
   apiCreateEmployee,
+  apiCreateRole,
   apiDeleteAttendance,
   apiDeleteEmployee,
+  apiDeleteRole,
   apiGetAttendance,
   apiGetEmployees,
   apiGetRoles,
@@ -72,7 +74,7 @@ import {
   type Role,
 } from '@/lib/types';
 
-type Modal = 'none' | 'employee' | 'attendance' | 'edit-attendance';
+type Modal = 'none' | 'employee' | 'attendance' | 'edit-attendance' | 'role';
 type ViewTab = 'sheet' | 'report' | 'search';
 
 const FAVICON_SRC = '/favicon.png';
@@ -124,6 +126,9 @@ export default function App() {
   const [empContact, setEmpContact] = useState('');
   const [empRole, setEmpRole] = useState<EmployeeRole>('BDE');
   const [empJoiningDate, setEmpJoiningDate] = useState('');
+
+  const [roleName, setRoleName] = useState('');
+  const [roleDescription, setRoleDescription] = useState('');
 
   const [employeeId, setEmployeeId] = useState('');
   const [attDate, setAttDate] = useState(todayISO());
@@ -473,6 +478,54 @@ export default function App() {
       );
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Failed to seed sample data.');
+    }
+  };
+
+  const openRoleModal = () => {
+    setRoleName('');
+    setRoleDescription('');
+    setModal('role');
+  };
+
+  const saveRole = async (e: FormEvent) => {
+    e.preventDefault();
+    const name = roleName.trim();
+    const description = roleDescription.trim();
+
+    if (!name) {
+      setNotice('Role name is required.');
+      return;
+    }
+
+    try {
+      await apiCreateRole({ name, description });
+      setNotice(`Role "${name}" added successfully.`);
+      await refreshData();
+      setRoleName('');
+      setRoleDescription('');
+      setModal('none');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to create role.');
+    }
+  };
+
+  const deleteCustomRole = async (id: string) => {
+    const role = roles.find((r) => r._id === id);
+    if (!role) return;
+
+    if (role.isDefault) {
+      setNotice('Cannot delete system default roles.');
+      return;
+    }
+
+    if (!confirm(`Delete role "${role.name}"?`)) return;
+
+    try {
+      await apiDeleteRole(id);
+      setNotice(`Role "${role.name}" deleted.`);
+      await refreshData();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to delete role.');
     }
   };
 
@@ -991,6 +1044,10 @@ export default function App() {
               <UserPlus className="h-4 w-4 shrink-0" />
               <span className="truncate">Add Employee</span>
             </button>
+            <button onClick={openRoleModal} className="ui-btn-ghost justify-center sm:justify-start">
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Custom Role</span>
+            </button>
             <button
               onClick={() => openAttendanceModal()}
               disabled={employees.length === 0}
@@ -1068,6 +1125,72 @@ export default function App() {
             <span className="hidden sm:inline">{' · '}</span>
             <span className="block sm:inline">Month = {monthRange.label}</span>
           </div>
+        </section>
+
+        {/* Roles Management Section */}
+        <section className={`ui-panel mb-6 p-3 sm:p-5 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className={`text-sm font-semibold sm:text-base ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+              Available Roles
+            </h2>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-900'
+              }`}
+            >
+              {roles.length}
+            </span>
+          </div>
+
+          {roles.length === 0 ? (
+            <p className="ui-muted text-sm">No roles available.</p>
+          ) : (
+            <div className="space-y-2">
+              {roles.map((role) => (
+                <div
+                  key={role._id}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-950'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                      {role.name}
+                      {role.isDefault && (
+                        <span
+                          className={`ml-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            isDark
+                              ? 'bg-green-500/20 text-green-300'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          System
+                        </span>
+                      )}
+                    </p>
+                    {role.description && (
+                      <p className="ui-muted text-xs">{role.description}</p>
+                    )}
+                  </div>
+                  {!role.isDefault && (
+                    <button
+                      onClick={() => deleteCustomRole(role._id)}
+                      className={`ml-2 rounded-lg border p-1.5 text-xs font-semibold shrink-0 ${
+                        isDark
+                          ? 'border-slate-700 text-rose-300 hover:bg-slate-800'
+                          : 'border-slate-200 text-rose-600 hover:bg-white'
+                      }`}
+                      title="Delete custom role"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Phone-only employee list toggle */}
@@ -1824,13 +1947,15 @@ export default function App() {
           >
             <div className="mb-5 flex items-center justify-between">
               <h2 className={`font-display text-lg font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                {modal === 'employee'
-                  ? editingEmployee
-                    ? 'Edit Employee'
-                    : 'Add Employee'
-                  : modal === 'edit-attendance'
-                    ? 'Edit Attendance'
-                    : 'Add Attendance'}
+                {modal === 'role'
+                  ? 'Add Custom Role'
+                  : modal === 'employee'
+                    ? editingEmployee
+                      ? 'Edit Employee'
+                      : 'Add Employee'
+                    : modal === 'edit-attendance'
+                      ? 'Edit Attendance'
+                      : 'Add Attendance'}
               </h2>
               <button
                 onClick={closeModal}
@@ -1844,7 +1969,48 @@ export default function App() {
               </button>
             </div>
 
-            {modal === 'employee' ? (
+            {modal === 'role' ? (
+              <form onSubmit={saveRole} className="space-y-4">
+                <div>
+                  <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Role name
+                  </label>
+                  <input
+                    value={roleName}
+                    onChange={(e) => setRoleName(e.target.value)}
+                    className="ui-field px-4 py-3"
+                    placeholder="e.g. Team Lead, Developer"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Description (optional)
+                  </label>
+                  <textarea
+                    value={roleDescription}
+                    onChange={(e) => setRoleDescription(e.target.value)}
+                    className="ui-field px-4 py-3"
+                    placeholder="e.g. Senior team member responsible for project leadership"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={closeModal} className="ui-btn-ghost flex-1 justify-center py-3">
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white ${
+                      isDark ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-900 hover:bg-blue-950'
+                    }`}
+                  >
+                    Create Role
+                  </button>
+                </div>
+              </form>
+            ) : modal === 'employee' ? (
               <form onSubmit={saveEmployee} className="space-y-4">
                 <div>
                   <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>

@@ -94,7 +94,7 @@ export const deleteRole = async (req, res) => {
 
 export const initializeDefaultRoles = async () => {
   try {
-    const defaultRoles = ['HR', 'Admin', 'Manager'];
+    const defaultRoles = ['Admin', 'Manager', 'BDE', 'Graphic Designer', 'Content creator', 'IT'];
 
     for (const roleName of defaultRoles) {
       const existing = await Role.findOne({ name: roleName });

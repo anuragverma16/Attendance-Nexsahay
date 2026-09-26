@@ -51,7 +51,7 @@ export const DEFAULT_EMPLOYEE_ROLES: EmployeeRole[] = [
   'Full Stack Developer',
 ];
 
-export const DEFAULT_SYSTEM_ROLES = ['HR', 'Admin', 'Manager'];
+export const DEFAULT_SYSTEM_ROLES = ['Admin', 'Manager', 'BDE', 'Graphic Designer', 'Content creator', 'IT'];
 
 export const EMPLOYEE_ROLES = DEFAULT_EMPLOYEE_ROLES;
 
