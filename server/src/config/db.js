@@ -11,6 +11,11 @@ const cached = globalForMongoose.__nexsahayMongoose;
 
 function assertCloudMongoUri() {
   const uri = env.mongoUri || '';
+
+  if (!uri) {
+    throw new Error('MONGODB_URI is not set in environment variables.');
+  }
+
   const isLocal =
     uri.includes('127.0.0.1') ||
     uri.includes('localhost') ||
@@ -25,18 +30,45 @@ function assertCloudMongoUri() {
 }
 
 export async function connectDB() {
+  // Return cached connection if exists
   if (cached.conn) {
+    console.log('Using cached MongoDB connection');
     return cached.conn;
   }
 
   assertCloudMongoUri();
 
+  // Create new connection promise if doesn't exist
   if (!cached.promise) {
+    console.log('Establishing new MongoDB connection...');
     mongoose.set('strictQuery', true);
-    cached.promise = mongoose.connect(env.mongoUri).then((connection) => {
-      console.log('MongoDB connected');
-      return connection;
-    });
+
+    // Connection options
+    const options = {
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      retryWrites: true,
+      w: 'majority',
+    };
+
+    cached.promise = mongoose.connect(env.mongoUri, options)
+      .then((connection) => {
+        console.log('✓ MongoDB connected successfully');
+
+        // Log connection details
+        console.log(`Database: ${connection.connection.db.databaseName}`);
+        console.log(`Host: ${connection.connection.host}`);
+
+        return connection;
+      })
+      .catch((error) => {
+        console.error('✗ MongoDB connection failed:', error.message);
+        cached.promise = null;
+        throw error;
+      });
   }
 
   try {
@@ -48,3 +80,16 @@ export async function connectDB() {
 
   return cached.conn;
 }
+
+// Connection error handling
+mongoose.connection.on('error', (error) => {
+  console.error('MongoDB connection error:', error);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected');
+});

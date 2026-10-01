@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   Search,
   Sun,
   Trash2,
+  TrendingUp,
   UserPlus,
   Users,
   UserX,
@@ -188,11 +190,16 @@ export default function App() {
     const present = dayRows.filter((r) => r.status === 'Present').length;
     const absent = dayRows.filter((r) => r.status === 'Absent').length;
     const notMarked = dayRows.filter((r) => r.status === 'Not Marked').length;
+    // New: Count late and half day from attendanceStatus
+    const late = dayRows.filter((r) => r.record?.attendanceStatus === 'Late').length;
+    const halfDay = dayRows.filter((r) => r.record?.attendanceStatus === 'Half Day').length;
     return {
       total: dayRows.length,
       present,
       absent,
       notMarked,
+      late,
+      halfDay,
     };
   }, [dayRows]);
 
@@ -379,9 +386,9 @@ export default function App() {
       return;
     }
 
-    if (status === 'Present') {
+    if (status === 'Present' || status === 'Late' || status === 'Half Day') {
       if (!entryTime) {
-        setNotice('Entry time is required for Present.');
+        setNotice('Entry time is required for this status.');
         return;
       }
       if (exitTime && exitTime < entryTime) {
@@ -923,13 +930,27 @@ export default function App() {
           </div>
         )}
 
-        <section className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-4">
+        <section className="mb-4 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-6">
           <StatCard label="Total Employees" value={stats.total} icon={<Users className="h-4 w-4" />} dark={isDark} />
           <StatCard
             label="Present"
             value={stats.present}
             icon={<CheckCircle2 className="h-4 w-4" />}
             tone="green"
+            dark={isDark}
+          />
+          <StatCard
+            label="Late"
+            value={stats.late}
+            icon={<TrendingUp className="h-4 w-4" />}
+            tone="amber"
+            dark={isDark}
+          />
+          <StatCard
+            label="Half Day"
+            value={stats.halfDay}
+            icon={<AlertCircle className="h-4 w-4" />}
+            tone="blue"
             dark={isDark}
           />
           <StatCard
@@ -1786,11 +1807,13 @@ export default function App() {
             ) : (
               <div>
                 <div
-                  className={`grid grid-cols-3 gap-2 border-b p-3 sm:gap-3 sm:p-5 ${
+                  className={`grid grid-cols-2 gap-2 border-b p-3 sm:grid-cols-5 sm:gap-3 sm:p-5 ${
                     isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-100 bg-slate-50/70'
                   }`}
                 >
                   <MiniStat label="Present" value={stats.present} className="text-green-500" dark={isDark} />
+                  <MiniStat label="Late" value={stats.late} className="text-orange-500" dark={isDark} />
+                  <MiniStat label="Half Day" value={stats.halfDay} className="text-blue-500" dark={isDark} />
                   <MiniStat label="Absent" value={stats.absent} className="text-rose-400" dark={isDark} />
                   <MiniStat label="Not Marked" value={stats.notMarked} className="text-amber-400" dark={isDark} />
                 </div>
@@ -2099,7 +2122,7 @@ export default function App() {
                   <label className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                     Attendance status
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <button
                       type="button"
                       onClick={() => {
@@ -2127,6 +2150,48 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setStatus('Late')}
+                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                        status === 'Late'
+                          ? isDark
+                            ? 'border-orange-500 bg-orange-500/15 ring-4 ring-orange-500/10'
+                            : 'border-orange-500 bg-orange-50 ring-4 ring-orange-500/10'
+                          : isDark
+                            ? 'border-slate-700 bg-slate-950 hover:bg-slate-800'
+                            : 'border-slate-200 bg-slate-50 hover:bg-white'
+                      }`}
+                    >
+                      <TrendingUp
+                        className={`mb-2 h-5 w-5 ${
+                          status === 'Late' ? 'text-orange-500' : 'text-slate-400'
+                        }`}
+                      />
+                      <p className={`text-sm font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Late</p>
+                      <p className="ui-muted text-xs">After 10:15 AM</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatus('Half Day')}
+                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                        status === 'Half Day'
+                          ? isDark
+                            ? 'border-blue-500 bg-blue-500/15 ring-4 ring-blue-500/10'
+                            : 'border-blue-500 bg-blue-50 ring-4 ring-blue-500/10'
+                          : isDark
+                            ? 'border-slate-700 bg-slate-950 hover:bg-slate-800'
+                            : 'border-slate-200 bg-slate-50 hover:bg-white'
+                      }`}
+                    >
+                      <AlertCircle
+                        className={`mb-2 h-5 w-5 ${
+                          status === 'Half Day' ? 'text-blue-500' : 'text-slate-400'
+                        }`}
+                      />
+                      <p className={`text-sm font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Half Day</p>
+                      <p className="ui-muted text-xs">After 12:00 PM</p>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setStatus('Absent')}
                       className={`rounded-2xl border px-4 py-4 text-left transition ${
                         status === 'Absent'
@@ -2144,12 +2209,12 @@ export default function App() {
                         }`}
                       />
                       <p className={`text-sm font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Absent</p>
-                      <p className="ui-muted text-xs">No entry / exit needed</p>
+                      <p className="ui-muted text-xs">No entry needed</p>
                     </button>
                   </div>
                 </div>
 
-                {status === 'Present' && (
+                {(status === 'Present' || status === 'Late' || status === 'Half Day') && (
                   <div className="space-y-3">
                     <div
                       className={`rounded-xl border px-3 py-2 text-xs ${

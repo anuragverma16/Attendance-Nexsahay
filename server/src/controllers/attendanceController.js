@@ -35,19 +35,34 @@ export async function upsertAttendance(req, res) {
     const date = String(req.body?.date || '');
     const entryTime = String(req.body?.entryTime || '');
     const exitTime = String(req.body?.exitTime || '');
-    const status = String(req.body?.status || 'Present');
+    let status = String(req.body?.status || '');
 
     if (!date) return fail(res, 400, 'Date is required.');
-    if (!entryTime) return fail(res, 400, 'Entry time is required.');
+    if (!status) return fail(res, 400, 'Status is required.');
+    if (!['Present', 'Absent', 'Late', 'Half Day'].includes(status)) {
+      return fail(res, 400, 'Invalid status. Must be Present, Absent, Late, or Half Day.');
+    }
 
     const employee = await Employee.findById(employeeId).select(
       'name contact role'
     ).lean();
     if (!employee) return fail(res, 404, 'Employee not found.');
 
-    // Determine attendance status based on entry time (IST)
-    const attendanceStatus = determineAttendanceStatus(entryTime);
-    const workingHours = calculateWorkingHours(entryTime, exitTime);
+    // Only calculate if needed (when status is Present or Late)
+    let attendanceStatus = status;
+    let workingHours = '';
+
+    if (status === 'Present' && entryTime) {
+      // Auto-determine status based on entry time for Present status
+      attendanceStatus = determineAttendanceStatus(entryTime);
+      workingHours = calculateWorkingHours(entryTime, exitTime) || '';
+    } else if (status === 'Late' && entryTime) {
+      attendanceStatus = 'Late';
+      workingHours = calculateWorkingHours(entryTime, exitTime) || '';
+    } else if (status === 'Half Day') {
+      attendanceStatus = 'Half Day';
+      workingHours = calculateWorkingHours(entryTime, exitTime) || '';
+    }
 
     const payload = {
       employeeId: employeeId,
@@ -55,12 +70,12 @@ export async function upsertAttendance(req, res) {
       employeeContact: employee.contact,
       employeeRole: employee.role,
       date,
-      status: 'Present', // Keep for backward compatibility
+      status,
       attendanceStatus,
-      entryTime,
-      exitTime,
-      workingHours: workingHours || '',
-      punchedOut: !!exitTime,
+      entryTime: status !== 'Absent' ? entryTime : '',
+      exitTime: status !== 'Absent' ? exitTime : '',
+      workingHours: status !== 'Absent' ? workingHours : '',
+      punchedOut: !!exitTime && status !== 'Absent',
     };
 
     const record = await Attendance.findOneAndUpdate(

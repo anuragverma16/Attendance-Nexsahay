@@ -5,7 +5,7 @@ export type EmployeeRole =
   | 'Full Stack Developer'
   | string;
 
-export type AttendanceStatus = 'Present' | 'Absent';
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Half Day';
 
 export type Role = {
   _id: string;
