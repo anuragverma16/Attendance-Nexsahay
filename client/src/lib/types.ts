@@ -33,8 +33,14 @@ export type AttendanceRecord = {
   employeeRole: EmployeeRole;
   date: string; // YYYY-MM-DD
   status: AttendanceStatus;
+  attendanceStatus?: 'Present' | 'Late' | 'Half Day' | 'Absent' | 'Leave'; // New field
   entryTime: string; // HH:mm
   exitTime: string; // HH:mm
+  workingHours?: string; // Xh YYm format
+  punchedOut?: boolean;
+  leaveType?: 'Casual Leave' | 'Sick Leave' | 'Paid Leave' | 'Unpaid Leave' | 'Other' | null;
+  leaveReason?: string;
+  leaveApproved?: boolean;
   createdAt: string;
 };
 

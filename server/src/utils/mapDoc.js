@@ -24,8 +24,14 @@ export function mapAttendance(doc) {
     employeeRole: obj.employeeRole,
     date: obj.date,
     status: obj.status,
+    attendanceStatus: obj.attendanceStatus || obj.status,
     entryTime: obj.entryTime || '',
     exitTime: obj.exitTime || '',
+    workingHours: obj.workingHours || '',
+    punchedOut: obj.punchedOut || false,
+    leaveType: obj.leaveType || null,
+    leaveReason: obj.leaveReason || '',
+    leaveApproved: obj.leaveApproved || false,
     createdAt: obj.createdAt
       ? new Date(obj.createdAt).toISOString()
       : new Date().toISOString(),

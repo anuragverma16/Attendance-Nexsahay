@@ -394,7 +394,26 @@ export function buildEmployeeMonthRows(
   return dates.map((date) => {
     const record =
       records.find((r) => r.employeeId === employee.id && r.date === date) ?? null;
-    const status = record ? record.status : ('Holiday' as const);
+
+    // Determine status from attendanceStatus, or calculate from entryTime
+    let status: 'Present' | 'Late' | 'Half Day' | 'Absent' | 'Holiday' | 'Leave';
+    if (record?.attendanceStatus) {
+      status = record.attendanceStatus;
+    } else if (record?.entryTime) {
+      // Calculate status from entry time if attendanceStatus not set
+      const [hours, minutes] = record.entryTime.split(':').map(Number);
+      const totalMinutes = hours * 60 + minutes;
+      if (totalMinutes <= 615) { // 10:15 AM
+        status = 'Present';
+      } else if (totalMinutes < 720) { // 12:00 PM
+        status = 'Late';
+      } else {
+        status = 'Half Day';
+      }
+    } else {
+      status = 'Holiday';
+    }
+
     return {
       date,
       record,
@@ -402,6 +421,7 @@ export function buildEmployeeMonthRows(
       day: formatWeekday(date),
       entryTime: record?.entryTime || '',
       exitTime: record?.exitTime || '',
+      workingHours: record?.workingHours || '',
     };
   });
 }
@@ -411,7 +431,7 @@ export function exportEmployeeMonthReport(options: {
   records: AttendanceRecord[];
   month: number;
   year: number;
-  statusFilter?: 'all' | 'Present' | 'Absent' | 'Holiday';
+  statusFilter?: 'all' | 'Present' | 'Absent' | 'Holiday' | 'Late' | 'Half Day' | 'Leave';
 }) {
   const { employee, records, month, year, statusFilter = 'all' } = options;
   const range = getMonthRange(monthYearToISO(month, year));
@@ -437,7 +457,14 @@ export function exportEmployeeMonthReport(options: {
   const allMonthRows = buildEmployeeMonthRows(employee, records, month, year);
   const present = allMonthRows.filter((r) => r.status === 'Present').length;
   const absent = allMonthRows.filter((r) => r.status === 'Absent').length;
+  const late = allMonthRows.filter((r) => r.status === 'Late').length;
+  const halfDay = allMonthRows.filter((r) => r.status === 'Half Day').length;
   const holiday = allMonthRows.filter((r) => r.status === 'Holiday').length;
+
+  // Calculate Late to Half Day conversion: every 3 late = 1 half day
+  const convertedHalfDaysFromLate = Math.floor(late / 3);
+  const remainingLateCount = late % 3;
+  const totalHalfDays = halfDay + convertedHalfDaysFromLate;
 
   const safeName = employee.name.replace(/[^\w.-]+/g, '_');
   writeWorkbook(
@@ -457,6 +484,9 @@ export function exportEmployeeMonthReport(options: {
           ['Total Days', allMonthRows.length],
           ['Present Days', present],
           ['Absent Days', absent],
+          ['Late Days', late],
+          ['Half Day', halfDay],
+          ['Converted from Late (3:1)', convertedHalfDaysFromLate],
           ['Holiday Days', holiday],
           ['Rows In Sheet', detail.length],
           ...standardTimingRows(),
@@ -474,6 +504,8 @@ export function exportEmployeeMonthReport(options: {
     label: `${employee.name} · ${range.label}`,
     present,
     absent,
+    late,
+    halfDay,
     holiday,
     count: detail.length,
   };

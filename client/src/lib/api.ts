@@ -109,6 +109,29 @@ export async function apiDeleteAttendance(id: string) {
   return request<{ id: string }>(`/attendance/${id}`, { method: 'DELETE' });
 }
 
+export async function apiPunchOut(input: {
+  employeeId: string;
+  date: string;
+  exitTime: string;
+}) {
+  return request<AttendanceRecord>('/attendance/punch-out', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function apiMarkLeave(input: {
+  employeeId: string;
+  date: string;
+  leaveType: 'Casual Leave' | 'Sick Leave' | 'Paid Leave' | 'Unpaid Leave' | 'Other';
+  leaveReason?: string;
+}) {
+  return request<AttendanceRecord>('/attendance/mark-leave', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function apiSeed() {
   return request<{ employees: number; attendance: number; message: string }>('/seed', {
     method: 'POST',

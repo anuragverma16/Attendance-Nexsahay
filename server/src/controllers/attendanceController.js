@@ -2,6 +2,12 @@ import { Attendance } from '../models/Attendance.js';
 import { Employee } from '../models/Employee.js';
 import { mapAttendance } from '../utils/mapDoc.js';
 import { fail, ok } from '../utils/response.js';
+import {
+  determineAttendanceStatus,
+  calculateWorkingHours,
+  getMonthlyLateCount,
+  convertLateToHalfDays,
+} from '../utils/attendanceUtils.js';
 
 export async function getAttendance(req, res) {
   try {
@@ -27,22 +33,21 @@ export async function upsertAttendance(req, res) {
   try {
     const employeeId = String(req.body?.employeeId || '');
     const date = String(req.body?.date || '');
-    const status = String(req.body?.status || '');
     const entryTime = String(req.body?.entryTime || '');
     const exitTime = String(req.body?.exitTime || '');
+    const status = String(req.body?.status || 'Present');
 
     if (!date) return fail(res, 400, 'Date is required.');
-    if (status !== 'Present' && status !== 'Absent') {
-      return fail(res, 400, 'Status must be Present or Absent.');
-    }
-    if (status === 'Present' && !entryTime) {
-      return fail(res, 400, 'Entry time is required for Present.');
-    }
+    if (!entryTime) return fail(res, 400, 'Entry time is required.');
 
     const employee = await Employee.findById(employeeId).select(
       'name contact role'
     ).lean();
     if (!employee) return fail(res, 404, 'Employee not found.');
+
+    // Determine attendance status based on entry time (IST)
+    const attendanceStatus = determineAttendanceStatus(entryTime);
+    const workingHours = calculateWorkingHours(entryTime, exitTime);
 
     const payload = {
       employeeId: employeeId,
@@ -50,9 +55,12 @@ export async function upsertAttendance(req, res) {
       employeeContact: employee.contact,
       employeeRole: employee.role,
       date,
-      status,
-      entryTime: status === 'Present' ? entryTime : '',
-      exitTime: status === 'Present' ? exitTime : '',
+      status: 'Present', // Keep for backward compatibility
+      attendanceStatus,
+      entryTime,
+      exitTime,
+      workingHours: workingHours || '',
+      punchedOut: !!exitTime,
     };
 
     const record = await Attendance.findOneAndUpdate(
@@ -111,6 +119,86 @@ export async function deleteAttendance(req, res) {
     return ok(res, { id: String(record._id) });
   } catch (error) {
     return fail(res, 500, error.message || 'Failed to delete attendance.');
+  }
+}
+
+export async function punchOut(req, res) {
+  try {
+    const employeeId = String(req.body?.employeeId || '');
+    const date = String(req.body?.date || '');
+    const exitTime = String(req.body?.exitTime || '');
+
+    if (!employeeId || !date || !exitTime) {
+      return fail(res, 400, 'Employee ID, date, and exit time are required.');
+    }
+
+    const record = await Attendance.findOne({ employeeId, date });
+    if (!record) {
+      return fail(res, 404, 'No punch-in record found for this employee today.');
+    }
+
+    if (record.punchedOut) {
+      return fail(res, 400, 'Already punched out today.');
+    }
+
+    const workingHours = calculateWorkingHours(record.entryTime, exitTime);
+
+    const updated = await Attendance.findOneAndUpdate(
+      { employeeId, date },
+      {
+        exitTime,
+        workingHours: workingHours || '',
+        punchedOut: true,
+      },
+      { new: true }
+    ).lean();
+
+    return ok(res, mapAttendance(updated));
+  } catch (error) {
+    return fail(res, 500, error.message || 'Failed to punch out.');
+  }
+}
+
+export async function markLeave(req, res) {
+  try {
+    const employeeId = String(req.body?.employeeId || '');
+    const date = String(req.body?.date || '');
+    const leaveType = String(req.body?.leaveType || '');
+    const leaveReason = String(req.body?.leaveReason || '');
+
+    if (!employeeId || !date || !leaveType) {
+      return fail(res, 400, 'Employee ID, date, and leave type are required.');
+    }
+
+    const validLeaveTypes = ['Casual Leave', 'Sick Leave', 'Paid Leave', 'Unpaid Leave', 'Other'];
+    if (!validLeaveTypes.includes(leaveType)) {
+      return fail(res, 400, 'Invalid leave type.');
+    }
+
+    const employee = await Employee.findById(employeeId).select('name contact role').lean();
+    if (!employee) return fail(res, 404, 'Employee not found.');
+
+    const updated = await Attendance.findOneAndUpdate(
+      { employeeId, date },
+      {
+        employeeName: employee.name,
+        employeeContact: employee.contact,
+        employeeRole: employee.role,
+        attendanceStatus: 'Leave',
+        leaveType,
+        leaveReason,
+        leaveApproved: true,
+        entryTime: '',
+        exitTime: '',
+        workingHours: '',
+        punchedOut: false,
+      },
+      { new: true, upsert: true }
+    ).lean();
+
+    return ok(res, mapAttendance(updated));
+  } catch (error) {
+    return fail(res, 500, error.message || 'Failed to mark leave.');
   }
 }
 

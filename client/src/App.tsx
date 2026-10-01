@@ -48,6 +48,7 @@ import {
   apiGetEmployees,
   apiGetRoles,
   apiLogin,
+  apiMarkLeave,
   apiSeed,
   apiUpdateAttendance,
   apiUpdateEmployee,
@@ -105,7 +106,7 @@ export default function App() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [roleFilter, setRoleFilter] = useState<'all' | EmployeeRole>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'Not Marked'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'Not Marked' | 'Holiday' | 'Late' | 'Half Day' | 'Leave'>('all');
   const [viewTab, setViewTab] = useState<ViewTab>('sheet');
   const [modal, setModal] = useState<Modal>('none');
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
@@ -120,7 +121,7 @@ export default function App() {
   const [searchEmployeeId, setSearchEmployeeId] = useState('');
   const [searchMonth, setSearchMonth] = useState(() => parseISODate(todayISO()).getMonth() + 1);
   const [searchYear, setSearchYear] = useState(() => getYear(todayISO()));
-  const [searchStatus, setSearchStatus] = useState<'all' | AttendanceStatus | 'Holiday'>('all');
+  const [searchStatus, setSearchStatus] = useState<'all' | AttendanceStatus | 'Holiday' | 'Late' | 'Half Day' | 'Leave'>('all');
 
   const [empName, setEmpName] = useState('');
   const [empContact, setEmpContact] = useState('');
@@ -576,13 +577,20 @@ export default function App() {
 
   const employeeMonthStats = useMemo(() => {
     if (!searchEmployee) {
-      return { present: 0, absent: 0, holiday: 0, total: 0 };
+      return { present: 0, absent: 0, late: 0, halfDay: 0, leave: 0, holiday: 0, total: 0 };
     }
     const all = buildEmployeeMonthRows(searchEmployee, records, searchMonth, searchYear);
+    const late = all.filter((r) => r.status === 'Late').length;
+    const halfDay = all.filter((r) => r.status === 'Half Day').length;
+    const convertedFromLate = Math.floor(late / 3);
     return {
       total: all.length,
       present: all.filter((r) => r.status === 'Present').length,
       absent: all.filter((r) => r.status === 'Absent').length,
+      late,
+      halfDay,
+      leave: all.filter((r) => r.status === 'Leave').length,
+      convertedFromLate,
       holiday: all.filter((r) => r.status === 'Holiday').length,
     };
   }, [searchEmployee, records, searchMonth, searchYear]);
@@ -1353,7 +1361,7 @@ export default function App() {
                   }`}
                 >
                   <div className="flex flex-wrap gap-2">
-                    {(['all', 'Present', 'Absent', 'Holiday'] as const).map((s) => (
+                    {(['all', 'Present', 'Absent', 'Late', 'Half Day', 'Leave', 'Holiday'] as const).map((s) => (
                       <button
                         key={s}
                         onClick={() => setSearchStatus(s)}
@@ -1363,11 +1371,17 @@ export default function App() {
                               ? 'bg-green-600 text-white'
                               : s === 'Absent'
                                 ? 'bg-rose-600 text-white'
-                                : s === 'Holiday'
-                                  ? 'bg-indigo-500 text-white'
-                                  : isDark
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-blue-900 text-white'
+                                : s === 'Late'
+                                  ? 'bg-yellow-600 text-white'
+                                  : s === 'Half Day'
+                                    ? 'bg-orange-600 text-white'
+                                    : s === 'Leave'
+                                      ? 'bg-purple-600 text-white'
+                                      : s === 'Holiday'
+                                        ? 'bg-indigo-500 text-white'
+                                        : isDark
+                                          ? 'bg-green-600 text-white'
+                                          : 'bg-blue-900 text-white'
                             : isDark
                               ? 'border border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
                               : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
@@ -1400,13 +1414,16 @@ export default function App() {
                 ) : (
                   <>
                     <div
-                      className={`grid grid-cols-2 gap-2 border-b p-3 sm:grid-cols-4 sm:gap-3 sm:p-5 ${
+                      className={`grid grid-cols-2 gap-2 border-b p-3 sm:grid-cols-6 sm:gap-3 sm:p-5 ${
                         isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-100 bg-slate-50/70'
                       }`}
                     >
                       <MiniStat label="Days" value={employeeMonthStats.total} className={isDark ? 'text-slate-100' : 'text-slate-800'} dark={isDark} />
                       <MiniStat label="Present" value={employeeMonthStats.present} className="text-green-500" dark={isDark} />
                       <MiniStat label="Absent" value={employeeMonthStats.absent} className="text-rose-400" dark={isDark} />
+                      <MiniStat label="Late" value={employeeMonthStats.late} className="text-yellow-400" dark={isDark} />
+                      <MiniStat label="Half Day" value={employeeMonthStats.halfDay} className="text-orange-400" dark={isDark} />
+                      <MiniStat label="Leave" value={employeeMonthStats.leave} className="text-purple-400" dark={isDark} />
                       <MiniStat label="Holiday" value={employeeMonthStats.holiday} className="text-indigo-400" dark={isDark} />
                     </div>
 
@@ -2522,7 +2539,7 @@ function StatusBadge({
   detail,
   dark = false,
 }: {
-  status: AttendanceStatus | 'Not Marked' | 'Holiday';
+  status: AttendanceStatus | 'Not Marked' | 'Holiday' | 'Late' | 'Half Day' | 'Leave';
   detail?: string;
   dark?: boolean;
 }) {
@@ -2531,12 +2548,18 @@ function StatusBadge({
         Present: 'border-green-500/40 bg-green-500/15 text-green-300',
         Absent: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
         'Not Marked': 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+        Late: 'border-yellow-500/40 bg-yellow-500/15 text-yellow-300',
+        'Half Day': 'border-orange-500/40 bg-orange-500/15 text-orange-300',
+        Leave: 'border-purple-500/40 bg-purple-500/15 text-purple-300',
         Holiday: 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300',
       }
     : {
         Present: 'border-green-200 bg-green-50 text-green-700',
         Absent: 'border-rose-200 bg-rose-50 text-rose-700',
         'Not Marked': 'border-amber-200 bg-amber-50 text-amber-700',
+        Late: 'border-yellow-200 bg-yellow-50 text-yellow-700',
+        'Half Day': 'border-orange-200 bg-orange-50 text-orange-700',
+        Leave: 'border-purple-200 bg-purple-50 text-purple-700',
         Holiday: 'border-indigo-200 bg-indigo-50 text-indigo-700',
       };
 
