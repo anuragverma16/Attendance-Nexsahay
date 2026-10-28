@@ -347,23 +347,31 @@ export default function App() {
     nextExit: string,
     existingId?: string
   ) => {
+    const hasTimes = nextStatus === 'Present' || nextStatus === 'Late' || nextStatus === 'Half Day';
+
     try {
-      if (existingId) {
+      if (existingId && !(nextStatus === 'Late' || nextStatus === 'Half Day')) {
         await apiUpdateAttendance(existingId, {
           employeeId: employee.id,
           date,
           status: nextStatus,
-          entryTime: nextStatus === 'Present' ? nextEntry : '',
-          exitTime: nextStatus === 'Present' ? nextExit : '',
+          entryTime: hasTimes ? nextEntry : '',
+          exitTime: hasTimes ? nextExit : '',
         });
       } else {
-        await apiUpsertAttendance({
+        // Late / Half Day can't go through PUT (the server only accepts Present/Absent there),
+        // so use the upsert route, which accepts them and keeps the same employee + date.
+        const saved = await apiUpsertAttendance({
           employeeId: employee.id,
           date,
           status: nextStatus,
-          entryTime: nextStatus === 'Present' ? nextEntry : '',
-          exitTime: nextStatus === 'Present' ? nextExit : '',
+          entryTime: hasTimes ? nextEntry : '',
+          exitTime: hasTimes ? nextExit : '',
         });
+        // If the date was changed while editing, remove the old record so it isn't duplicated.
+        if (existingId && saved.id !== existingId) {
+          await apiDeleteAttendance(existingId);
+        }
       }
       setSelectedDate(date);
       await refreshData();
@@ -414,6 +422,45 @@ export default function App() {
       closeModal();
     } catch {
       // notice already set
+    }
+  };
+
+  const unmarkAttendance = async () => {
+    if (!editing) return;
+
+    const confirmed = confirm(
+      `Remove attendance record for ${editing.employeeName} on ${editing.date}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await apiDeleteAttendance(editing.id);
+      setNotice(`Attendance unmarked for ${editing.employeeName}.`);
+      await refreshData();
+      closeModal();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to unmark attendance.');
+    }
+  };
+
+  const unmarkAttendanceFromSidebar = async (employeeId: string, date: string) => {
+    const record = records.find((r) => r.employeeId === employeeId && r.date === date);
+    if (!record) {
+      setNotice('No attendance record found for this date.');
+      return;
+    }
+
+    const confirmed = confirm(
+      `Remove attendance record for ${record.employeeName} on ${record.date}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await apiDeleteAttendance(record.id);
+      setNotice(`Attendance unmarked for ${record.employeeName}.`);
+      await refreshData();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Failed to unmark attendance.');
     }
   };
 
@@ -1235,6 +1282,7 @@ export default function App() {
             onEditEmployee={openEditEmployeeModal}
             onDeleteEmployee={deleteEmployee}
             onMarkAttendance={openAttendanceModal}
+            onUnmarkAttendance={unmarkAttendanceFromSidebar}
             showDesktopAdd={false}
           />
         </aside>
@@ -1255,6 +1303,7 @@ export default function App() {
               onEditEmployee={openEditEmployeeModal}
               onDeleteEmployee={deleteEmployee}
               onMarkAttendance={openAttendanceModal}
+              onUnmarkAttendance={unmarkAttendanceFromSidebar}
               showDesktopAdd
             />
           </aside>
@@ -2261,6 +2310,17 @@ export default function App() {
                 )}
 
                 <div className="flex gap-3 pt-1">
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={unmarkAttendance}
+                      className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white ${
+                        isDark ? 'bg-red-600 hover:bg-red-500' : 'bg-red-700 hover:bg-red-800'
+                      }`}
+                    >
+                      Unmark
+                    </button>
+                  )}
                   <button type="button" onClick={closeModal} className="ui-btn-ghost flex-1 justify-center py-3">
                     Cancel
                   </button>
@@ -2359,6 +2419,7 @@ function EmployeeSidebarBody({
   onEditEmployee,
   onDeleteEmployee,
   onMarkAttendance,
+  onUnmarkAttendance,
   showDesktopAdd,
 }: {
   isDark: boolean;
@@ -2373,6 +2434,7 @@ function EmployeeSidebarBody({
   onEditEmployee: (employee: Employee) => void;
   onDeleteEmployee: (id: string) => void;
   onMarkAttendance: (employeeId: string) => void;
+  onUnmarkAttendance: (employeeId: string, date: string) => Promise<void>;
   showDesktopAdd: boolean;
 }) {
   return (
@@ -2522,6 +2584,18 @@ function EmployeeSidebarBody({
                       >
                         Mark
                       </button>
+                      {dayStatus !== 'Not Marked' && (
+                        <button
+                          onClick={() => onUnmarkAttendance(emp.id, selectedDate)}
+                          className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                            isDark
+                              ? 'border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20'
+                              : 'border-red-100 bg-white text-red-700 hover:bg-red-50'
+                          }`}
+                        >
+                          Unmark
+                        </button>
+                      )}
                     </div>
                   </div>
                 </li>
